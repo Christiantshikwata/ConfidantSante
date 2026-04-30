@@ -5,6 +5,7 @@ class AppColors {
   static const Color primaryLight = Color(0xFF1976D2);
   static const Color white       = Color(0xFFFFFFFF);
   static const Color success     = Color(0xFF2E7D32);
+  static const Color primaryPale   = Color(0xFFE3F2FD);
   static const Color warning     = Color(0xFFF57C00);
   static const Color danger      = Color(0xFFE53935);
   static const Color textPrimary = Color(0xFF212121);

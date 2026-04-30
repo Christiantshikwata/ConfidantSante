@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../language/language_screen.dart';
+
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -44,12 +46,21 @@ class _SplashScreenState extends State<SplashScreen>
     _naviguerVersLaSuite();
   }
 
-  Future<void> _naviguerVersLaSuite() async {
-    await Future.delayed(const Duration(seconds: 3));
-    if (!mounted) return;
-    // On naviguera vers l'écran de langue ici plus tard
-    debugPrint('Splash terminé');
-  }
+
+
+    Future<void> _naviguerVersLaSuite() async {
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
+
+      // Navigator.pushReplacement : on va vers l'écran de langue
+      // et on ne peut plus revenir au Splash en appuyant sur retour
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const LanguageScreen(),
+        ),
+      );
+    }
 
   @override
   void dispose() {
@@ -72,30 +83,27 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-
-                    // Logo
+                    // Logo professionnel — croix médicale SVG
                     Container(
-                      width: 100,
-                      height: 100,
+                      width: 96,
+                      height: 96,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha:0.15),
+                        color: Colors.white.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha:0.3),
+                          color: Colors.white.withValues(alpha: 0.25),
                           width: 1.5,
                         ),
                       ),
-                      child: const Center(
-                        child: Text(
-                          '+',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 52,
-                            fontWeight: FontWeight.w200,
-                          ),
+                      child: Center(
+                        child: Icon(
+                          Icons.health_and_safety_outlined,
+                          color: Colors.white,
+                          size: 52,
                         ),
                       ),
                     ),
+                    // Logo
 
                     const SizedBox(height: 28),
 
