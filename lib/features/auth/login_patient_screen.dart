@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
 import 'mot_de_passe_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginPatientScreen extends StatefulWidget {
   const LoginPatientScreen({super.key});
@@ -29,26 +30,59 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
   // Validation et envoi du numéro
   Future<void> _envoyerCode() async {
-    // Vérifie que le formulaire est valide
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _enChargement = true);
 
-    // Simule l'envoi du SMS (2 secondes)
-    // On remplacera ça par Firebase plus tard
-    await Future.delayed(const Duration(seconds: 2));
+    final numero = '+243${_numeroController.text.trim()}';
 
-    if (!mounted) return;
-    setState(() => _enChargement = false);
+    // Firebase envoie le vrai SMS
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: numero,
 
-    // Navigate vers l'écran de vérification OTP
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => OtpScreen(
-          numero: '+243${_numeroController.text.trim()}',
-        ),
-      ),
+      // SMS envoyé — on navigue vers l'écran OTP
+      codeSent: (String verificationId, int? resendToken) {
+        setState(() => _enChargement = false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OtpScreen(
+              numero: numero,
+              verificationId: verificationId,
+            ),
+          ),
+        );
+      },
+
+      // Vérification automatique (Android seulement)
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        await FirebaseAuth.instance.signInWithCredential(credential);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MotDePasseScreen(),
+          ),
+        );
+      },
+
+      // Erreur
+      verificationFailed: (FirebaseAuthException e) {
+        setState(() => _enChargement = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Erreur : ${e.message ?? "Vérifiez votre numéro"}',
+            ),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+
+      // Timeout — 60 secondes
+      timeout: const Duration(seconds: 60),
+      codeAutoRetrievalTimeout: (String verificationId) {},
     );
   }
 
@@ -327,8 +361,13 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
 class OtpScreen extends StatefulWidget {
   final String numero;
+  final String verificationId; // ← nouveau paramètre
 
-  const OtpScreen({super.key, required this.numero});
+  const OtpScreen({
+    super.key,
+    required this.numero,
+    required this.verificationId,
+  });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -389,27 +428,46 @@ class _OtpScreenState extends State<OtpScreen> {
       _codeInvalide = false;
     });
 
-    // Simule la vérification (2 secondes)
-    // Code test : 123456
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Crée les credentials avec le code saisi
+      final credential = PhoneAuthProvider.credential(
+        verificationId: widget.verificationId,
+        smsCode: _codeComplet,
+      );
 
-    if (!mounted) return;
-    setState(() => _enChargement = false);
+      // Connecte l'utilisateur avec Firebase
+      await FirebaseAuth.instance.signInWithCredential(credential);
 
-    if (_codeComplet == '123456') {
-      // Code correct — navigation vers création mot de passe
+      if (!mounted) return;
+      setState(() => _enChargement = false);
+
+      // Code correct — on continue
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => const MotDePasseScreen(),
         ),
       );
-    } else {
-      // Code incorrect
-      setState(() => _codeInvalide = true);
-      // Vide tous les champs
+
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _enChargement = false;
+        _codeInvalide = true;
+      });
       for (var c in _controllers) c.clear();
       _focusNodes[0].requestFocus();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.code == 'invalid-verification-code'
+                ? 'Code incorrect. Vérifiez votre SMS.'
+                : 'Erreur : ${e.message}',
+          ),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 

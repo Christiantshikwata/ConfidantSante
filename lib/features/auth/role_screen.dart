@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import 'login_patient_screen.dart';
-
+import '../soignant/dashboard_soignant_screen.dart';
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key});
 
@@ -315,37 +315,33 @@ class LoginSoignantScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.medical_services_outlined,
-              size: 64,
-              color: AppColors.primary.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Login Soignant',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+        child: ElevatedButton(
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                const DashboardSoignantScreen(),
               ),
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0288D1),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 32, vertical: 16,
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Prochaine étape...',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
             ),
-            const SizedBox(height: 40),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Retour'),
+          ),
+          child: const Text(
+            'Accéder au tableau de bord soignant',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
-          ],
+          ),
         ),
       ),
     );
