@@ -569,6 +569,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
       ),
     );
   }
+  }
 
   // Helpers
   Widget _titreSec(String titre) {
