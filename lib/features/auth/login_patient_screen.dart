@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
+import 'mot_de_passe_screen.dart';
 
 class LoginPatientScreen extends StatefulWidget {
   const LoginPatientScreen({super.key});
@@ -729,52 +730,6 @@ class _OtpScreenState extends State<OtpScreen> {
           ),
 
         ],
-      ),
-    );
-  }
-}
-
-// Placeholder mot de passe — prochaine étape
-class MotDePasseScreen extends StatelessWidget {
-  const MotDePasseScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.lock_outline,
-              size: 64,
-              color: AppColors.primary.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Créer un mot de passe',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Prochaine étape...',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 40),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Retour'),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'features/splash/splash_screen.dart';
 import 'core/constants/app_colors.dart';
+import 'features/auth/role_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +36,11 @@ class ConfidantSanteApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const SplashScreen(),
+      routes: {
+        '/': (context) => const SplashScreen(),
+        '/role': (context) => const RoleScreen(),
+      },
+      initialRoute: '/',
     );
   }
 }
