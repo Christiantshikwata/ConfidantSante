@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../patient/dashboard_patient_screen.dart';
+import '../../core/services/session_service.dart';
 class MotDePasseScreen extends StatefulWidget {
   const MotDePasseScreen({super.key});
 
@@ -429,21 +430,24 @@ class _PinScreenState extends State<PinScreen> {
   // Vérifie que les deux PIN correspondent
   void _verifierPin() {
     if (_pin == _pinConfirm) {
-      // PIN correct — on navigue vers le dashboard
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const DashboardPatientScreen(),
-        ),
-      );
+      // Sauvegarde le PIN dans le stockage sécurisé
+      SessionService().sauvegarderPin(_pin).then((_) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const DashboardPatientScreen(),
+          ),
+        );
+      });
     } else {
-      // PIN incorrect — on recommence la confirmation
       setState(() {
         _erreur = true;
         _pinConfirm = '';
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

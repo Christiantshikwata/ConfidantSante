@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "270791856003",
+    "project_id": "confidantsante",
+    "storage_bucket": "confidantsante.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:270791856003:android:d083f92d7ef4832a4cb0b6",
+        "android_client_info": {
+          "package_name": "cd.udbl.fsi.confidantsante"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_yoWT2chpIuwvV3O8Nmxyx5HTv-pBjLA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

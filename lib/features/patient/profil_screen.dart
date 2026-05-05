@@ -549,10 +549,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
-              // Navigation vers l'écran de rôle
+              // Ferme tous les écrans et va vers /role
               Navigator.of(context).pushNamedAndRemoveUntil(
-                '/',
+                '/role',
                     (route) => false,
               );
             },
@@ -568,7 +567,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
         ],
       ),
     );
-  }
   }
 
   // Helpers

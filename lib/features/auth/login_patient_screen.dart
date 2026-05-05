@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/services/database_service.dart';
+import '../../core/services/session_service.dart';
 import 'mot_de_passe_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
+import 'package:confidantsante/features/patient/dashboard_patient_screen.dart';
 class LoginPatientScreen extends StatefulWidget {
   const LoginPatientScreen({super.key});
 
@@ -13,77 +14,124 @@ class LoginPatientScreen extends StatefulWidget {
 
 class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
-  // Contrôleur du champ de saisie du numéro
-  final TextEditingController _numeroController = TextEditingController();
+  final TextEditingController _numeroController  = TextEditingController();
+  final TextEditingController _nomController     = TextEditingController();
+  final TextEditingController _mdpController     = TextEditingController();
+  final GlobalKey<FormState>  _formKey           = GlobalKey<FormState>();
 
-  // Clé du formulaire — permet de valider les champs
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-
-  // true quand on attend la réponse du serveur
-  bool _enChargement = false;
+  bool _enChargement   = false;
+  bool _mdpVisible     = false;
+  bool _premiereVisite = true;
+  String? _erreur;
 
   @override
   void dispose() {
     _numeroController.dispose();
+    _nomController.dispose();
+    _mdpController.dispose();
     super.dispose();
   }
 
-  // Validation et envoi du numéro
-  Future<void> _envoyerCode() async {
+  // ── INSCRIPTION ───────────────────────────────────────────────────────────
+  Future<void> _inscrire() async {
     if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _enChargement = true;
+      _erreur = null;
+    });
 
-    setState(() => _enChargement = true);
+    final numero = _numeroController.text.trim();
 
-    final numero = '+243${_numeroController.text.trim()}';
+    // Vérifie si le numéro existe déjà
+    final existe = await DatabaseService().patientExiste(numero);
+    if (!mounted) return;
 
-    // Firebase envoie le vrai SMS
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: numero,
+    if (existe) {
+      setState(() {
+        _enChargement = false;
+        _erreur = 'Ce numéro est déjà enregistré. Connectez-vous.';
+      });
+      return;
+    }
 
-      // SMS envoyé — on navigue vers l'écran OTP
-      codeSent: (String verificationId, int? resendToken) {
-        setState(() => _enChargement = false);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => OtpScreen(
-              numero: numero,
-              verificationId: verificationId,
-            ),
-          ),
-        );
-      },
-
-      // Vérification automatique (Android seulement)
-      verificationCompleted: (PhoneAuthCredential credential) async {
-        await FirebaseAuth.instance.signInWithCredential(credential);
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const MotDePasseScreen(),
-          ),
-        );
-      },
-
-      // Erreur
-      verificationFailed: (FirebaseAuthException e) {
-        setState(() => _enChargement = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Erreur : ${e.message ?? "Vérifiez votre numéro"}',
-            ),
-            backgroundColor: AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      },
-
-      // Timeout — 60 secondes
-      timeout: const Duration(seconds: 60),
-      codeAutoRetrievalTimeout: (String verificationId) {},
+    // Crée le patient dans SQLite
+    final id = await DatabaseService().creerPatient(
+      nom: _nomController.text.trim(),
+      numero: numero,
+      motDePasse: _mdpController.text,
     );
+
+    if (!mounted) return;
+
+    if (id > 0) {
+      // Sauvegarde la session
+      await SessionService().sauvegarderSession(
+        patientId: id.toString(),
+        nom: _nomController.text.trim(),
+        numero: numero,
+      );
+
+      setState(() => _enChargement = false);
+
+      // Va créer le PIN
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const PinScreen(),
+        ),
+      );
+    } else {
+      setState(() {
+        _enChargement = false;
+        _erreur = 'Erreur lors de la création du compte.';
+      });
+    }
+  }
+
+  // ── CONNEXION ─────────────────────────────────────────────────────────────
+  Future<void> _connecter() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _enChargement = true;
+      _erreur = null;
+    });
+
+    final patient = await DatabaseService().connecterPatient(
+      numero: _numeroController.text.trim(),
+      motDePasse: _mdpController.text,
+    );
+
+    if (!mounted) return;
+
+    if (patient != null) {
+      // Sauvegarde la session
+      await SessionService().sauvegarderSession(
+        patientId: patient['id'].toString(),
+        nom: patient['nom'],
+        numero: patient['numero'],
+      );
+
+      setState(() => _enChargement = false);
+
+      // Vérifie si le PIN est déjà configuré
+      final pinOk = await SessionService().pinConfigue();
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => pinOk
+              ? const PinVerificationScreen()
+              : const PinScreen(),
+        ),
+      );
+    } else {
+      setState(() {
+        _enChargement = false;
+        _erreur = 'Numéro ou mot de passe incorrect.';
+      });
+    }
   }
 
   @override
@@ -93,13 +141,13 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
       body: Column(
         children: [
 
-          // En-tête bleu
+          // En-tête
           Container(
             width: double.infinity,
             decoration: const BoxDecoration(
               color: AppColors.primary,
               borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(28),
+                bottomLeft:  Radius.circular(28),
                 bottomRight: Radius.circular(28),
               ),
             ),
@@ -111,57 +159,56 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
-                    // Bouton retour
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
-                        width: 38,
-                        height: 38,
+                        width: 38, height: 38,
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
                           Icons.arrow_back_ios_new,
-                          color: Colors.white,
-                          size: 16,
+                          color: Colors.white, size: 16,
                         ),
                       ),
                     ),
 
                     const SizedBox(height: 24),
 
-                    // Icône
                     Container(
-                      width: 56,
-                      height: 56,
+                      width: 56, height: 56,
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
-                        Icons.phone_outlined,
-                        color: Colors.white,
-                        size: 28,
+                        Icons.health_and_safety_outlined,
+                        color: Colors.white, size: 28,
                       ),
                     ),
 
                     const SizedBox(height: 16),
 
-                    const Text(
-                      'Connexion Patient',
-                      style: TextStyle(
+                    Text(
+                      _premiereVisite
+                          ? 'Créer un compte'
+                          : 'Connexion Patient',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
                       ),
                     ),
 
                     const SizedBox(height: 6),
 
                     Text(
-                      'Entrez votre numéro pour recevoir\nun code de vérification par SMS.',
+                      _premiereVisite
+                          ? 'Créez votre compte pour commencer\n'
+                          'à suivre votre traitement.'
+                          : 'Connectez-vous pour accéder\n'
+                          'à votre espace personnel.',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 14,
@@ -187,23 +234,62 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
                     const SizedBox(height: 8),
 
-                    const Text(
-                      'Numéro de téléphone',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                        letterSpacing: 0.2,
+                    // Toggle inscription / connexion
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryPale,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          _toggleBtn(
+                            'Nouveau compte',
+                            _premiereVisite,
+                                () => setState(() {
+                              _premiereVisite = true;
+                              _erreur = null;
+                            }),
+                          ),
+                          _toggleBtn(
+                            'Se connecter',
+                            !_premiereVisite,
+                                () => setState(() {
+                              _premiereVisite = false;
+                              _erreur = null;
+                            }),
+                          ),
+                        ],
                       ),
                     ),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 20),
 
-                    // Champ de saisie avec indicatif +243
+                    // Champ nom (inscription seulement)
+                    if (_premiereVisite) ...[
+                      _labelChamp('Votre nom complet'),
+                      const SizedBox(height: 8),
+                      _champTexte(
+                        controller: _nomController,
+                        hint: 'Ex : Christian Ngoy',
+                        icone: Icons.person_outline,
+                        validator: (v) {
+                          if (_premiereVisite &&
+                              (v == null || v.isEmpty)) {
+                            return 'Veuillez entrer votre nom';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Champ numéro
+                    _labelChamp('Numéro de téléphone'),
+                    const SizedBox(height: 8),
+
                     TextFormField(
                       controller: _numeroController,
                       keyboardType: TextInputType.phone,
-                      // Limite à 9 chiffres (format congolais)
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(9),
@@ -215,12 +301,10 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                         letterSpacing: 1,
                       ),
                       decoration: InputDecoration(
-                        // Préfixe +243
                         prefixIcon: Container(
                           margin: const EdgeInsets.fromLTRB(14, 8, 0, 8),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
+                            horizontal: 12, vertical: 6,
                           ),
                           decoration: BoxDecoration(
                             color: AppColors.primaryPale,
@@ -239,7 +323,6 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                         hintStyle: const TextStyle(
                           color: Color(0xFFB0BEC5),
                           fontSize: 15,
-                          letterSpacing: 1,
                         ),
                         filled: true,
                         fillColor: Colors.white,
@@ -269,55 +352,148 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                           ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
+                          horizontal: 16, vertical: 16,
                         ),
                       ),
-                      // Validation du numéro
-                      validator: (valeur) {
-                        if (valeur == null || valeur.isEmpty) {
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
                           return 'Veuillez entrer votre numéro';
                         }
-                        if (valeur.length < 9) {
+                        if (v.length < 9) {
                           return 'Le numéro doit contenir 9 chiffres';
                         }
-                        return null; // null = valide
+                        return null;
                       },
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
 
-                    // Info sur le SMS
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 14,
-                          color: AppColors.textSecondary.withValues(
-                            alpha: 0.7,
+                    // Champ mot de passe
+                    _labelChamp(
+                      _premiereVisite
+                          ? 'Créez un mot de passe'
+                          : 'Mot de passe',
+                    ),
+                    const SizedBox(height: 8),
+
+                    TextFormField(
+                      controller: _mdpController,
+                      obscureText: !_mdpVisible,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: _premiereVisite
+                            ? 'Minimum 6 caractères'
+                            : 'Votre mot de passe',
+                        hintStyle: const TextStyle(
+                          color: Color(0xFFB0BEC5),
+                          fontSize: 14,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: AppColors.primary,
+                          size: 20,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _mdpVisible
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.textSecondary,
+                            size: 20,
+                          ),
+                          onPressed: () => setState(
+                                () => _mdpVisible = !_mdpVisible,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Un code à 6 chiffres sera envoyé par SMS',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary.withValues(
-                              alpha: 0.7,
-                            ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE0E7EF),
                           ),
                         ),
-                      ],
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE0E7EF),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: AppColors.danger,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16,
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Veuillez entrer un mot de passe';
+                        }
+                        if (v.length < 6) {
+                          return 'Minimum 6 caractères';
+                        }
+                        return null;
+                      },
                     ),
 
-                    const SizedBox(height: 32),
+                    // Message d'erreur
+                    if (_erreur != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEBEE),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.danger.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              color: AppColors.danger,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _erreur!,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.danger,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
-                    // Bouton envoyer
+                    const SizedBox(height: 28),
+
+                    // Bouton principal
                     SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _enChargement ? null : _envoyerCode,
+                        onPressed: _enChargement
+                            ? null
+                            : (_premiereVisite ? _inscrire : _connecter),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -328,16 +504,17 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                         ),
                         child: _enChargement
                             ? const SizedBox(
-                          width: 22,
-                          height: 22,
+                          width: 22, height: 22,
                           child: CircularProgressIndicator(
                             color: Colors.white,
                             strokeWidth: 2.5,
                           ),
                         )
-                            : const Text(
-                          'Recevoir le code SMS',
-                          style: TextStyle(
+                            : Text(
+                          _premiereVisite
+                              ? 'Créer mon compte'
+                              : 'Se connecter',
+                          style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
@@ -355,440 +532,360 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
       ),
     );
   }
+
+  Widget _labelChamp(String texte) {
+    return Text(
+      texte,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+        letterSpacing: 0.2,
+      ),
+    );
+  }
+
+  Widget _champTexte({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icone,
+    required String? Function(String?) validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      style: const TextStyle(
+        fontSize: 14,
+        color: AppColors.textPrimary,
+      ),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(
+          color: Color(0xFFB0BEC5),
+          fontSize: 14,
+        ),
+        prefixIcon: Icon(icone, color: AppColors.primary, size: 20),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE0E7EF)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE0E7EF)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(
+            color: AppColors.primary, width: 1.5,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.danger),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16, vertical: 16,
+        ),
+      ),
+      validator: validator,
+    );
+  }
+
+  Widget _toggleBtn(
+      String label,
+      bool actif,
+      VoidCallback onTap,
+      ) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.all(4),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: actif ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: actif ? Colors.white : AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-// ── ÉCRAN OTP ────────────────────────────────────────────────────────────────
+// ── ÉCRAN VÉRIFICATION PIN ───────────────────────────────────────────────────
 
-class OtpScreen extends StatefulWidget {
-  final String numero;
-  final String verificationId; // ← nouveau paramètre
-
-  const OtpScreen({
-    super.key,
-    required this.numero,
-    required this.verificationId,
-  });
+class PinVerificationScreen extends StatefulWidget {
+  const PinVerificationScreen({super.key});
 
   @override
-  State<OtpScreen> createState() => _OtpScreenState();
+  State<PinVerificationScreen> createState() =>
+      _PinVerificationScreenState();
 }
 
-class _OtpScreenState extends State<OtpScreen> {
+class _PinVerificationScreenState
+    extends State<PinVerificationScreen> {
 
-  // 6 contrôleurs — un par chiffre du code OTP
-  final List<TextEditingController> _controllers =
-  List.generate(6, (_) => TextEditingController());
+  String _pin = '';
+  bool _erreur = false;
+  int _tentatives = 0;
 
-  // 6 focusNodes — pour passer automatiquement au chiffre suivant
-  final List<FocusNode> _focusNodes =
-  List.generate(6, (_) => FocusNode());
-
-  bool _enChargement = false;
-  bool _codeInvalide = false;
-
-  // Compteur pour renvoyer le code
-  int _secondesRestantes = 60;
-  bool _peutRenvoyer = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _demarrerCompteur();
-  }
-
-  @override
-  void dispose() {
-    for (var c in _controllers) c.dispose();
-    for (var f in _focusNodes) f.dispose();
-    super.dispose();
-  }
-
-  // Compteur de 60 secondes avant de pouvoir renvoyer
-  Future<void> _demarrerCompteur() async {
-    for (int i = 60; i >= 0; i--) {
-      await Future.delayed(const Duration(seconds: 1));
-      if (!mounted) return;
-      setState(() {
-        _secondesRestantes = i;
-        if (i == 0) _peutRenvoyer = true;
-      });
-    }
-  }
-
-  // Récupère le code complet depuis les 6 champs
-  String get _codeComplet =>
-      _controllers.map((c) => c.text).join();
-
-  // Vérifie le code OTP
-  Future<void> _verifierCode() async {
-    if (_codeComplet.length < 6) return;
-
+  void _ajouterChiffre(String c) {
+    if (_pin.length >= 4) return;
     setState(() {
-      _enChargement = true;
-      _codeInvalide = false;
+      _pin += c;
+      _erreur = false;
     });
+    if (_pin.length == 4) _verifierPin();
+  }
 
-    try {
-      // Crée les credentials avec le code saisi
-      final credential = PhoneAuthProvider.credential(
-        verificationId: widget.verificationId,
-        smsCode: _codeComplet,
-      );
+  void _supprimer() {
+    if (_pin.isEmpty) return;
+    setState(() {
+      _pin = _pin.substring(0, _pin.length - 1);
+      _erreur = false;
+    });
+  }
 
-      // Connecte l'utilisateur avec Firebase
-      await FirebaseAuth.instance.signInWithCredential(credential);
+  Future<void> _verifierPin() async {
+    final ok = await SessionService().verifierPin(_pin);
+    if (!mounted) return;
 
-      if (!mounted) return;
-      setState(() => _enChargement = false);
-
-      // Code correct — on continue
+    if (ok) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const MotDePasseScreen(),
+          builder: (context) => const DashboardPatientScreen(),
         ),
       );
-
-    } on FirebaseAuthException catch (e) {
+    } else {
       setState(() {
-        _enChargement = false;
-        _codeInvalide = true;
+        _erreur = true;
+        _tentatives++;
+        _pin = '';
       });
-      for (var c in _controllers) c.clear();
-      _focusNodes[0].requestFocus();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.code == 'invalid-verification-code'
-                ? 'Code incorrect. Vérifiez votre SMS.'
-                : 'Erreur : ${e.message}',
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    return _buildEcranPin(
+      titre: 'Entrez votre PIN',
+      sousTitre: 'Votre code à 4 chiffres',
+      pin: _pin,
+      erreur: _erreur,
+      messageErreur: _tentatives >= 3
+          ? 'Trop de tentatives. Reconnectez-vous.'
+          : 'PIN incorrect. Réessayez.',
+    );
+  }
+
+  Widget _buildEcranPin({
+    required String titre,
+    required String sousTitre,
+    required String pin,
+    required bool erreur,
+    required String messageErreur,
+  }) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      body: Column(
-        children: [
+      backgroundColor: AppColors.primary,
+      body: SafeArea(
+        child: Column(
+          children: [
 
-          // En-tête
-          Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(28),
-                bottomRight: Radius.circular(28),
-              ),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-
-                    const SizedBox(height: 24),
-
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.sms_outlined,
-                        color: Colors.white,
-                        size: 28,
-                      ),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new,
+                      color: Colors.white, size: 16,
                     ),
-
-                    const SizedBox(height: 16),
-
-                    const Text(
-                      'Vérification SMS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    Text(
-                      'Code envoyé au ${widget.numero}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.75),
-                        fontSize: 14,
-                      ),
-                    ),
-
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
 
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+            const Spacer(),
+
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
+                Icons.pin_outlined,
+                color: Colors.white, size: 32,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Text(
+              titre,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              sousTitre,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 14,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            AnimatedOpacity(
+              opacity: erreur ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 40),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  messageErreur,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(4, (i) {
+                final rempli = i < pin.length;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
+                  width: 16, height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: rempli
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.3),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            const Spacer(),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(40, 0, 40, 40),
               child: Column(
                 children: [
-
+                  _rangee(['1', '2', '3']),
                   const SizedBox(height: 16),
-
-                  // Message d'erreur
-                  if (_codeInvalide)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 20),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFEBEE),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.danger.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            color: AppColors.danger,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          const Expanded(
-                            child: Text(
-                              'Code incorrect. Vérifiez votre SMS et réessayez.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.danger,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  const Text(
-                    'Entrez le code à 6 chiffres',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Les 6 cases OTP
+                  _rangee(['4', '5', '6']),
+                  const SizedBox(height: 16),
+                  _rangee(['7', '8', '9']),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(6, (index) {
-                      return SizedBox(
-                        width: 46,
-                        height: 56,
-                        child: TextFormField(
-                          controller: _controllers[index],
-                          focusNode: _focusNodes[index],
-                          textAlign: TextAlign.center,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(1),
-                          ],
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE0E7EF),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: _codeInvalide
-                                    ? AppColors.danger
-                                    : const Color(0xFFE0E7EF),
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: AppColors.primary,
-                                width: 1.5,
-                              ),
-                            ),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          onChanged: (valeur) {
-                            if (valeur.isNotEmpty) {
-                              // Passe au champ suivant automatiquement
-                              if (index < 5) {
-                                _focusNodes[index + 1].requestFocus();
-                              } else {
-                                // Dernier champ — on vérifie
-                                _focusNodes[index].unfocus();
-                                _verifierCode();
-                              }
-                            } else {
-                              // Si on efface — revient au champ précédent
-                              if (index > 0) {
-                                _focusNodes[index - 1].requestFocus();
-                              }
-                            }
-                          },
-                        ),
-                      );
-                    }),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // Renvoyer le code
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        'Vous n\'avez pas reçu le code ? ',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary.withValues(
-                            alpha: 0.8,
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: _peutRenvoyer
-                            ? () {
-                          setState(() {
-                            _peutRenvoyer = false;
-                            _secondesRestantes = 60;
-                          });
-                          _demarrerCompteur();
-                        }
-                            : null,
-                        child: Text(
-                          _peutRenvoyer
-                              ? 'Renvoyer'
-                              : 'Renvoyer (${_secondesRestantes}s)',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _peutRenvoyer
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
+                      const SizedBox(width: 70),
+                      _touche('0'),
+                      SizedBox(
+                        width: 70, height: 70,
+                        child: GestureDetector(
+                          onTap: _supprimer,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Icon(
+                              Icons.backspace_outlined,
+                              color: Colors.white, size: 22,
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 32),
-
-                  // Bouton vérifier
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _enChargement ? null : _verifierCode,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: _enChargement
-                          ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                          : const Text(
-                        'Vérifier le code',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Note test
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryPale,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(
-                          Icons.bug_report_outlined,
-                          size: 14,
-                          color: AppColors.primary,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Mode test : utilisez le code 123456',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
                 ],
               ),
             ),
-          ),
 
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _rangee(List<String> chiffres) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: chiffres.map((c) => _touche(c)).toList(),
+    );
+  }
+
+  Widget _touche(String label) {
+    return GestureDetector(
+      onTap: () => _ajouterChiffre(label),
+      child: Container(
+        width: 70, height: 70,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }
 }
+
+// Import nécessaire

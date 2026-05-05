@@ -12,18 +12,19 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # Firebase
+  # Firebase — seulement Core et Firestore
   firebase_core: ^2.24.2
-  firebase_auth: ^4.15.3
   cloud_firestore: ^4.13.6
-  firebase_messaging: ^14.7.9
 
-  # Local storage (offline-first)
+  # Base de données locale offline
   sqflite: ^2.3.0
   path: ^1.8.3
 
-  # Biométrie
-  local_auth: ^2.1.8
+  # Notifications locales
+  flutter_local_notifications: ^17.2.4
+
+  # Sécurité — stockage PIN
+  flutter_secure_storage: ^9.0.0
 
   # Navigation
   go_router: ^12.1.3
@@ -33,14 +34,7 @@ dependencies:
 
   # UI
   flutter_svg: ^2.0.9
-  lottie: ^2.7.0
   smooth_page_indicator: ^1.1.0
-
-  # Notifications
-  flutter_local_notifications: ^17.0.0
-
-  # Sécurité
-  flutter_secure_storage: ^9.0.0
 
   # Intl
   intl: ^0.20.2

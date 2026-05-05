@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/providers/patient_provider.dart';
+import '../../core/services/database_service.dart';
+import '../../core/services/session_service.dart';
 import 'rappels_screen.dart';
 import 'discretion_screen.dart';
 import 'profil_screen.dart';
@@ -12,28 +16,32 @@ class DashboardPatientScreen extends StatefulWidget {
       _DashboardPatientScreenState();
 }
 
-class _DashboardPatientScreenState extends State<DashboardPatientScreen> {
+class _DashboardPatientScreenState
+    extends State<DashboardPatientScreen> {
 
-  // Index de la page active dans la bottom navigation
   int _pageActive = 0;
 
-  // Les pages de la bottom navigation
-  final List<Widget> _pages = const [
-    _PageAccueil(),
-    _PageRappels(),
-    _PageDiscretion(),
-    _PageProfil(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    // Charge les données dès l'ouverture du dashboard
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PatientProvider>().chargerDonnees();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      const _PageAccueil(),
+      const RappelsScreen(),
+      const DiscretionScreen(),
+      const ProfilScreen(),
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
-
-      // Corps principal
-      body: _pages[_pageActive],
-
-      // Barre de navigation du bas
+      body: pages[_pageActive],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -53,7 +61,7 @@ class _DashboardPatientScreenState extends State<DashboardPatientScreen> {
         ),
         child: BottomNavigationBar(
           currentIndex: _pageActive,
-          onTap: (index) => setState(() => _pageActive = index),
+          onTap: (i) => setState(() => _pageActive = i),
           backgroundColor: Colors.transparent,
           elevation: 0,
           type: BottomNavigationBarType.fixed,
@@ -92,338 +100,453 @@ class _DashboardPatientScreenState extends State<DashboardPatientScreen> {
   }
 }
 
-// ── PAGE ACCUEIL ─────────────────────────────────────────────────────────────
+// ── PAGE ACCUEIL CONNECTÉE À SQLITE ──────────────────────────────────────────
 
 class _PageAccueil extends StatelessWidget {
   const _PageAccueil();
 
+  static String _salutation() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Bonjour,';
+    if (h < 17) return 'Bon après-midi,';
+    return 'Bonsoir,';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
 
-        // En-tête avec dégradé
-        SliverToBoxAdapter(
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1976D2),
-                ],
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(28),
-                bottomRight: Radius.circular(28),
-              ),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+    // Consumer écoute les changements du PatientProvider
+    return Consumer<PatientProvider>(
+      builder: (context, patient, _) {
 
-                    // Ligne du haut : salutation + avatar
-                    Row(
+        // Initiales du nom
+        final initiales = patient.nom.isNotEmpty
+            ? patient.nom.trim().split(' ')
+            .map((e) => e.isNotEmpty ? e[0] : '')
+            .take(2)
+            .join()
+            .toUpperCase()
+            : 'CS';
+
+        return CustomScrollView(
+          slivers: [
+
+            // En-tête dégradé
+            SliverToBoxAdapter(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF0D47A1),
+                      Color(0xFF1565C0),
+                      Color(0xFF1976D2),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _salutation(),
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.75),
-                                  fontSize: 13,
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _salutation(),
+                                    style: TextStyle(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.75),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    // Affiche le vrai nom depuis SQLite
+                                    patient.nom.isNotEmpty
+                                        ? patient.nom
+                                        : 'Patient',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Avatar avec vraies initiales
+                            Container(
+                              width: 42, height: 42,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  width: 1.5,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Christian 👋',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
+                              child: Center(
+                                child: Text(
+                                  initiales,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Carte observance avec vraies données
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Observance du mois',
+                                    style: TextStyle(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.8),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  Text(
+                                    // Vrai taux d'observance
+                                    '${patient.observance.toInt()}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: patient.observance / 100,
+                                  backgroundColor:
+                                  Colors.white.withValues(alpha: 0.25),
+                                  valueColor:
+                                  const AlwaysStoppedAnimation(
+                                      Colors.white),
+                                  minHeight: 8,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '${patient.joursActifs} prises effectuées',
+                                    style: TextStyle(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.65),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${patient.historique.length - patient.joursActifs} manquées',
+                                    style: TextStyle(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.65),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
 
-                        // Avatar initiales
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.4),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'CN',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+            ),
 
-                    const SizedBox(height: 20),
+            // Contenu
+            SliverPadding(
+              padding: const EdgeInsets.all(20),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
 
-                    // Carte observance
+                  // Stats
+                  Row(
+                    children: [
+                      _CarteStatistique(
+                        icone: Icons.alarm_outlined,
+                        // Vrai nombre de rappels
+                        valeur: '${patient.rappels.length}',
+                        label: "Rappels configurés",
+                        couleur: AppColors.primary,
+                        fondCouleur: AppColors.primaryPale,
+                      ),
+                      const SizedBox(width: 12),
+                      _CarteStatistique(
+                        icone: Icons.calendar_today_outlined,
+                        valeur: '${patient.joursActifs}',
+                        label: 'Jours actifs',
+                        couleur: AppColors.success,
+                        fondCouleur: const Color(0xFFE8F5E9),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Section rappels du jour
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Médicaments du jour',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Voir tout',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Liste des rappels depuis SQLite
+                  if (patient.rappels.isEmpty)
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(16),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: const Color(0xFFE0E7EF),
                         ),
                       ),
                       child: Column(
                         children: [
-                          Row(
-                            mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Observance du mois',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const Text(
-                                '87%',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
+                          Icon(
+                            Icons.medication_outlined,
+                            size: 40,
+                            color: AppColors.primary.withValues(alpha: 0.3),
                           ),
-                          const SizedBox(height: 10),
-                          // Barre de progression
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: 0.87,
-                              backgroundColor:
-                              Colors.white.withValues(alpha: 0.25),
-                              valueColor:
-                              const AlwaysStoppedAnimation(Colors.white),
-                              minHeight: 8,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '26 / 30 prises effectuées',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.65),
-                                  fontSize: 11,
-                                ),
-                              ),
-                              Text(
-                                '4 manquées',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.65),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // Contenu scrollable
-        SliverPadding(
-          padding: const EdgeInsets.all(20),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-
-              // Stats rapides
-              Row(
-                children: [
-                  _CarteStatistique(
-                    icone: Icons.alarm_outlined,
-                    valeur: '3',
-                    label: "Rappels aujourd'hui",
-                    couleur: AppColors.primary,
-                    fondCouleur: AppColors.primaryPale,
-                  ),
-                  const SizedBox(width: 12),
-                  _CarteStatistique(
-                    icone: Icons.calendar_today_outlined,
-                    valeur: '26',
-                    label: 'Jours actifs',
-                    couleur: AppColors.success,
-                    fondCouleur: const Color(0xFFE8F5E9),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Titre section rappels
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Prochains rappels',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    'Voir tout',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 14),
-
-              // Liste des médicaments
-              _CarteMedicament(
-                nom: 'Lamivudine 150mg',
-                heure: 'Matin • 08h00',
-                couleurIcone: AppColors.primary,
-                estPris: true,
-              ),
-              const SizedBox(height: 10),
-              _CarteMedicament(
-                nom: 'Efavirenz 600mg',
-                heure: 'Soir • 21h00',
-                couleurIcone: AppColors.warning,
-                estPris: false,
-              ),
-              const SizedBox(height: 10),
-              _CarteMedicament(
-                nom: 'Ténofovir 300mg',
-                heure: 'Soir • 21h00',
-                couleurIcone: const Color(0xFF7B1FA2),
-                estPris: false,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Prochain rendez-vous
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFFE0E7EF),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryPale,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.event_outlined,
-                        color: AppColors.primary,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Prochain rendez-vous',
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Aucun rappel configuré',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 14,
                               color: AppColors.textSecondary,
                             ),
                           ),
-                          SizedBox(height: 3),
-                          Text(
-                            '20 avril 2026 — Dr. Ndetereyuwe',
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Ajoutez vos médicaments dans l\'onglet Rappels',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
                       ),
+                    )
+                  else
+                    ...patient.rappels.map((rappel) =>
+                        _CarteMedicamentSQLite(
+                          rappel: rappel,
+                          patientId: patient.patientId!,
+                        ),
                     ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: AppColors.textSecondary,
-                    ),
-                  ],
-                ),
+
+                  const SizedBox(height: 100),
+
+                ]),
               ),
+            ),
 
-              const SizedBox(height: 100),
-
-            ]),
-          ),
-        ),
-
-      ],
+          ],
+        );
+      },
     );
-  }
-
-  // Retourne la salutation selon l'heure
-  static String _salutation() {
-    final heure = DateTime.now().hour;
-    if (heure < 12) return 'Bonjour,';
-    if (heure < 17) return 'Bon après-midi,';
-    return 'Bonsoir,';
   }
 }
 
-// ── CARTE STATISTIQUE ────────────────────────────────────────────────────────
+// Carte médicament connectée à SQLite
+class _CarteMedicamentSQLite extends StatefulWidget {
+  final Map<String, dynamic> rappel;
+  final int patientId;
 
+  const _CarteMedicamentSQLite({
+    required this.rappel,
+    required this.patientId,
+  });
+
+  @override
+  State<_CarteMedicamentSQLite> createState() =>
+      _CarteMedicamentSQLiteState();
+}
+
+class _CarteMedicamentSQLiteState
+    extends State<_CarteMedicamentSQLite> {
+
+  bool _pris = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _pris
+              ? AppColors.success.withValues(alpha: 0.3)
+              : const Color(0xFFE0E7EF),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: _pris
+                  ? AppColors.success.withValues(alpha: 0.1)
+                  : AppColors.primaryPale,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.medication_outlined,
+              color: _pris ? AppColors.success : AppColors.primary,
+              size: 22,
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.rappel['nom_medicament'] ?? '',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _pris
+                        ? AppColors.textSecondary
+                        : AppColors.textPrimary,
+                    decoration: _pris
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${widget.rappel['dosage'] ?? ''} • ${widget.rappel['heure'] ?? ''}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Bouton confirmer prise
+          GestureDetector(
+            onTap: () async {
+              setState(() => _pris = !_pris);
+              if (_pris) {
+                // Enregistre la prise dans SQLite
+                await DatabaseService().enregistrerPrise(
+                  traitementId: widget.rappel['id'] ?? 0,
+                  patientId: widget.patientId,
+                  statut: 'pris',
+                );
+                // Met à jour les stats
+                if (context.mounted) {
+                  context.read<PatientProvider>().chargerDonnees();
+                }
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _pris ? AppColors.success : Colors.transparent,
+                border: Border.all(
+                  color: _pris
+                      ? AppColors.success
+                      : const Color(0xFFCFD8DC),
+                  width: 1.5,
+                ),
+              ),
+              child: _pris
+                  ? const Icon(
+                Icons.check,
+                color: Colors.white, size: 16,
+              )
+                  : null,
+            ),
+          ),
+
+        ],
+      ),
+    );
+  }
+}
+
+// Carte statistique
 class _CarteStatistique extends StatelessWidget {
   final IconData icone;
   final String valeur;
@@ -460,8 +583,7 @@ class _CarteStatistique extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 38, height: 38,
               decoration: BoxDecoration(
                 color: fondCouleur,
                 borderRadius: BorderRadius.circular(10),
@@ -487,215 +609,6 @@ class _CarteStatistique extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── CARTE MÉDICAMENT ─────────────────────────────────────────────────────────
-
-class _CarteMedicament extends StatefulWidget {
-  final String nom;
-  final String heure;
-  final Color couleurIcone;
-  final bool estPris;
-
-  const _CarteMedicament({
-    required this.nom,
-    required this.heure,
-    required this.couleurIcone,
-    required this.estPris,
-  });
-
-  @override
-  State<_CarteMedicament> createState() => _CarteMedicamentState();
-}
-
-class _CarteMedicamentState extends State<_CarteMedicament> {
-  late bool _pris;
-
-  @override
-  void initState() {
-    super.initState();
-    _pris = widget.estPris;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _pris
-              ? AppColors.success.withValues(alpha: 0.3)
-              : const Color(0xFFE0E7EF),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-
-          // Icône médicament
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: widget.couleurIcone.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.medication_outlined,
-              color: widget.couleurIcone,
-              size: 22,
-            ),
-          ),
-
-          const SizedBox(width: 14),
-
-          // Nom et heure
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.nom,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: _pris
-                        ? AppColors.textSecondary
-                        : AppColors.textPrimary,
-                    decoration: _pris
-                        ? TextDecoration.lineThrough
-                        : TextDecoration.none,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  widget.heure,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Bouton confirmer la prise
-          GestureDetector(
-            onTap: () => setState(() => _pris = !_pris),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _pris
-                    ? AppColors.success
-                    : Colors.transparent,
-                border: Border.all(
-                  color: _pris
-                      ? AppColors.success
-                      : const Color(0xFFCFD8DC),
-                  width: 1.5,
-                ),
-              ),
-              child: _pris
-                  ? const Icon(
-                Icons.check,
-                color: Colors.white,
-                size: 16,
-              )
-                  : null,
-            ),
-          ),
-
-        ],
-      ),
-    );
-  }
-}
-
-// ── PAGES PLACEHOLDER ────────────────────────────────────────────────────────
-
-class _PageRappels extends StatelessWidget {
-  const _PageRappels();
-
-  @override
-  Widget build(BuildContext context) {
-    return const RappelsScreen();
-  }
-}
-class _PageDiscretion extends StatelessWidget {
-  const _PageDiscretion();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DiscretionScreen();
-  }
-}
-
-class _PageProfil extends StatelessWidget {
-  const _PageProfil();
-
-  @override
-  Widget build(BuildContext context) {
-    return const ProfilScreen();
-  }
-}
-
-class _PageEnConstruction extends StatelessWidget {
-  final String titre;
-  final IconData icone;
-
-  const _PageEnConstruction({
-    required this.titre,
-    required this.icone,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icone,
-                size: 64,
-                color: AppColors.primary.withValues(alpha: 0.4),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                titre,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Prochaine étape...',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

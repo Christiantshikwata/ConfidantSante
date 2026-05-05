@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:provider/provider.dart';
 import 'core/constants/app_colors.dart';
+import 'core/services/database_service.dart';
+import 'core/services/session_service.dart';
+import 'core/providers/patient_provider.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/auth/role_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialise Firebase au démarrage de l'app
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Initialise SQLite
+  await DatabaseService().database;
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -26,7 +26,13 @@ void main() async {
     ),
   );
 
-  runApp(const ConfidantSanteApp());
+  runApp(
+    // Provider rend les données accessibles partout dans l'app
+    ChangeNotifierProvider(
+      create: (_) => PatientProvider(),
+      child: const ConfidantSanteApp(),
+    ),
+  );
 }
 
 class ConfidantSanteApp extends StatelessWidget {
