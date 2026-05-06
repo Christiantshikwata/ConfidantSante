@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/providers/patient_provider.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/notification_service.dart';
 
 class RappelsScreen extends StatefulWidget {
   const RappelsScreen({super.key});
@@ -587,16 +588,7 @@ class _FormulaireAjoutRappelState
   }
 
   Future<void> _enregistrer() async {
-    if (_nomController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez entrer le nom du médicament'),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
+    if (_nomController.text.trim().isEmpty) return;
 
     setState(() => _enChargement = true);
 
@@ -604,12 +596,23 @@ class _FormulaireAjoutRappelState
         '${_heure.hour.toString().padLeft(2, '0')}h'
         '${_heure.minute.toString().padLeft(2, '0')}';
 
+    // 1 — Sauvegarde dans SQLite
     await context.read<PatientProvider>().ajouterRappel(
       nomMedicament: _nomController.text.trim(),
       dosage: _dosageController.text.trim().isEmpty
           ? '1 comprimé'
           : _dosageController.text.trim(),
       heure: heure,
+    );
+
+    // 2 — Programme la notification locale
+    await NotificationService().programmerDepuisTexte(
+      id: DateTime.now().millisecondsSinceEpoch % 100000,
+      nomMedicament: _nomController.text.trim(),
+      dosage: _dosageController.text.trim().isEmpty
+          ? '1 comprimé'
+          : _dosageController.text.trim(),
+      heureTexte: heure,
     );
 
     if (!mounted) return;
@@ -619,7 +622,7 @@ class _FormulaireAjoutRappelState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '✓ ${_nomController.text} ajouté à $heure',
+          '✓ ${_nomController.text} — rappel programmé à $heure',
         ),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,

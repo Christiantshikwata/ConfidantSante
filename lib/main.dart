@@ -7,12 +7,16 @@ import 'core/services/session_service.dart';
 import 'core/providers/patient_provider.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/auth/role_screen.dart';
+import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialise SQLite
   await DatabaseService().database;
+  // Notifications
+  await NotificationService().initialiser();
+
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,

@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/providers/patient_provider.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
+import '../../core/services/notification_service.dart';
 import 'rappels_screen.dart';
 import 'discretion_screen.dart';
 import 'profil_screen.dart';
@@ -397,7 +398,40 @@ class _PageAccueil extends StatelessWidget {
                           patientId: patient.patientId!,
                         ),
                     ),
-
+                  // BOUTON TEST — à supprimer avant soutenance
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await NotificationService().afficherNotification(
+                          id: 999,
+                          titre: '💊 Test — ConfidantSanté',
+                          corps:
+                          'Les notifications fonctionnent correctement !',
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.notifications_outlined,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
+                      label: const Text(
+                        'Tester une notification',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.5),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 100),
 
                 ]),
