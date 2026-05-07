@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../auth/role_screen.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/langue_provider.dart';
 // Les données de chaque slide
 // On les définit ici pour ne pas encombrer le widget principal
 class _SlideData {
@@ -98,6 +100,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final langue = context.watch<LangueProvider>();
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
@@ -121,8 +124,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       vertical: 6,
                     ),
                   ),
-                  child: const Text(
-                    'Passer',
+                  child: Text(langue.t('Passer'),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
@@ -184,10 +186,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ),
                       // Le texte du bouton change au dernier slide
-                      child: Text(
+                      child: Text(langue.t(
                         _slideActuel == _slides.length - 1
                             ? 'Commencer'
-                            : 'Suivant',
+                            : 'Suivant'),
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,

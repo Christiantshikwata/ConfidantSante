@@ -2,6 +2,10 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../onboarding/onboarding_screen.dart';
+import '../../core/l10n/app_translations.dart';
+import '../../core/services/session_service.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/langue_provider.dart';
 class LanguageScreen extends StatefulWidget {
   const LanguageScreen({super.key});
 
@@ -119,7 +123,11 @@ class _LanguageScreenState extends State<LanguageScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    // Change la langue via le Provider
+                    await context.read<LangueProvider>().changerLangue(_langueChoisie);
+
+                    if (!context.mounted) return;
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(

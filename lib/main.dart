@@ -3,20 +3,20 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'core/constants/app_colors.dart';
 import 'core/services/database_service.dart';
-import 'core/services/session_service.dart';
+import 'core/services/notification_service.dart';
 import 'core/providers/patient_provider.dart';
+import 'core/providers/langue_provider.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/auth/role_screen.dart';
-import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialise SQLite
   await DatabaseService().database;
-  // Notifications
   await NotificationService().initialiser();
 
+  // Charge la langue avant de lancer l'app
+  final langueProvider = LangueProvider();
+  await langueProvider.charger();
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -31,9 +31,11 @@ void main() async {
   );
 
   runApp(
-    // Provider rend les données accessibles partout dans l'app
-    ChangeNotifierProvider(
-      create: (_) => PatientProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: langueProvider),
+        ChangeNotifierProvider(create: (_) => PatientProvider()),
+      ],
       child: const ConfidantSanteApp(),
     ),
   );

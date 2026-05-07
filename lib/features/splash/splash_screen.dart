@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../language/language_screen.dart';
-
+import '../../core/l10n/app_translations.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -108,8 +108,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const SizedBox(height: 28),
 
                     // Nom de l'app
-                    const Text(
-                      'ConfidantSanté',
+                    Text(AppTranslations.t('app_nom'),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 28,
@@ -121,8 +120,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const SizedBox(height: 10),
 
                     // Slogan
-                    Text(
-                      'Votre santé, en toute discrétion',
+                  Text(AppTranslations.t('app_slogan'),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 14,

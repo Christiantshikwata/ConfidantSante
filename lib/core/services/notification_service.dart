@@ -34,10 +34,9 @@ class NotificationService {
       },
     );
 
-    // Permission Android 13+ — sur une seule ligne
-    final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-        _plugin.resolvePlatformSpecificImplementation
-    AndroidFlutterLocalNotificationsPlugin>();
+    // Permission Android 13+
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.requestNotificationsPermission();
 
     _initialise = true;
@@ -102,6 +101,8 @@ class NotificationService {
       prochain,
       NotificationDetails(android: _androidDetails),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
       payload: nomMedicament,
     );

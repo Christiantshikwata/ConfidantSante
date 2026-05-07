@@ -63,4 +63,13 @@ class SessionService {
     final pin = await _storage.read(key: 'pin');
     return pin != null && pin.isNotEmpty;
   }
+  // Sauvegarde la langue choisie
+  Future<void> sauvegarderLangue(String code) async {
+    await _storage.write(key: 'langue', value: code);
+  }
+
+// Récupère la langue sauvegardée
+  Future<String> getLangue() async {
+    return await _storage.read(key: 'langue') ?? 'fr';
+  }
 }
