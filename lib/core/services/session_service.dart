@@ -72,4 +72,36 @@ class SessionService {
   Future<String> getLangue() async {
     return await _storage.read(key: 'langue') ?? 'fr';
   }
+  /// Sauvegarde la session soignant
+  Future<void> sauvegarderSessionSoignant({
+    required String soignantId,
+    required String nom,
+    required String matricule,
+  }) async {
+    await _storage.write(key: 'soignant_id',       value: soignantId);
+    await _storage.write(key: 'soignant_nom',      value: nom);
+    await _storage.write(key: 'soignant_matricule',value: matricule);
+    await _storage.write(key: 'role',              value: 'soignant');
+    await _storage.write(key: 'connecte',          value: 'true');
+  }
+
+  /// Récupère l'ID du soignant connecté
+  Future<String?> getSoignantId() async {
+    return await _storage.read(key: 'soignant_id');
+  }
+
+  /// Récupère le nom du soignant connecté
+  Future<String?> getSoignantNom() async {
+    return await _storage.read(key: 'soignant_nom');
+  }
+
+  /// Récupère le matricule du soignant connecté
+  Future<String?> getSoignantMatricule() async {
+    return await _storage.read(key: 'soignant_matricule');
+  }
+
+  /// Retourne le rôle actuel ('patient' ou 'soignant')
+  Future<String> getRole() async {
+    return await _storage.read(key: 'role') ?? 'patient';
+  }
 }

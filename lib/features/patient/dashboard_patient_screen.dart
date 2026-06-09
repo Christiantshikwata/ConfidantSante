@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/providers/patient_provider.dart';
-import '../../core/services/database_service.dart';
-import '../../core/services/session_service.dart';
+//import '../../core/services/database_service.dart';
+//import '../../core/services/session_service.dart';
 import '../../core/services/notification_service.dart';
+import 'agenda_screen.dart';
 import 'rappels_screen.dart';
 import 'discretion_screen.dart';
 import 'profil_screen.dart';
@@ -110,6 +111,7 @@ class _PageAccueil extends StatelessWidget {
     final h = DateTime.now().hour;
     if (h < 12) return 'Bonjour,';
     if (h < 17) return 'Bon après-midi,';
+
     return 'Bonsoir,';
   }
 
@@ -537,40 +539,26 @@ class _CarteMedicamentSQLiteState
 
           // Bouton confirmer prise
           GestureDetector(
-            onTap: () async {
-              setState(() => _pris = !_pris);
-              if (_pris) {
-                // Enregistre la prise dans SQLite
-                await DatabaseService().enregistrerPrise(
-                  traitementId: widget.rappel['id'] ?? 0,
-                  patientId: widget.patientId,
-                  statut: 'pris',
-                );
-                // Met à jour les stats
-                if (context.mounted) {
-                  context.read<PatientProvider>().chargerDonnees();
-                }
-              }
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 32, height: 32,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AgendaScreen()),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _pris ? AppColors.success : Colors.transparent,
-                border: Border.all(
-                  color: _pris
-                      ? AppColors.success
-                      : const Color(0xFFCFD8DC),
-                  width: 1.5,
-                ),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE0E7EF)),
               ),
-              child: _pris
-                  ? const Icon(
-                Icons.check,
-                color: Colors.white, size: 16,
-              )
-                  : null,
+              child: Column(
+                children: [
+                  const Icon(Icons.calendar_today_rounded,
+                      color: AppColors.primary, size: 24),
+                  const SizedBox(height: 6),
+                  const Text('Agenda',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
             ),
           ),
 

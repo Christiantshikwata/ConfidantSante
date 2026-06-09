@@ -25,7 +25,10 @@ dependencies:
   timezone: ^0.9.4
   # Sécurité — stockage PIN
   flutter_secure_storage: ^9.0.0
-
+  # Biométrie (empreinte digitale / Face ID)
+  local_auth: ^2.2.0
+  # Connectivité réseau
+  connectivity_plus: ^6.0.3
   # Navigation
   go_router: ^12.1.3
 

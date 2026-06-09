@@ -124,7 +124,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       vertical: 6,
                     ),
                   ),
-                  child: Text(langue.t('Passer'),
+                  child: Text(langue.t('passer'),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
@@ -188,8 +188,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       // Le texte du bouton change au dernier slide
                       child: Text(langue.t(
                         _slideActuel == _slides.length - 1
-                            ? 'Commencer'
-                            : 'Suivant'),
+                            ? 'commencer'
+                            : 'suivant'),
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,

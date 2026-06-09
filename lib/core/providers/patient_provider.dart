@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/database_service.dart';
 import '../services/session_service.dart';
+import '../services/sync_service.dart';
 
 // Ce provider gère toutes les données du patient connecté
 // Il est accessible depuis n'importe quel écran
@@ -90,7 +91,7 @@ class PatientProvider extends ChangeNotifier {
       patientId:    _patientId!,
       statut:       'pris',
     );
-
+    SyncService().synchroniser();
     await chargerDonnees();
   }
 

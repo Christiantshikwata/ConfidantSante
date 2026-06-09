@@ -8,12 +8,14 @@ import 'core/providers/patient_provider.dart';
 import 'core/providers/langue_provider.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/auth/role_screen.dart';
+import 'core/services/sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService().database;
   await NotificationService().initialiser();
-
+  // Démarre l'écoute de connectivité pour sync automatique
+  SyncService().ecouterConnectivite();
   // Charge la langue avant de lancer l'app
   final langueProvider = LangueProvider();
   await langueProvider.charger();

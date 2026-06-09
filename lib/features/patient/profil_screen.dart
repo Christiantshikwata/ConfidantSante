@@ -1,5 +1,15 @@
+// lib/features/patient/profil_screen.dart
+// ConfidantSanté — Profil Patient connecté à SQLite via PatientProvider
+// Auteur : Christian Ngoy Tshikwata — UDBL Lubumbashi
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
+import '../../core/providers/patient_provider.dart';
+import '../../core/providers/langue_provider.dart';
+import '../../core/services/session_service.dart';
+import '../auth/mot_de_passe_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -10,34 +20,128 @@ class ProfilScreen extends StatefulWidget {
 
 class _ProfilScreenState extends State<ProfilScreen> {
 
-  // Données du patient — on les remplacera par Firebase plus tard
-  final String _nom = 'Christian Ngoy';
-  final String _telephone = '+243 8X XXX XXXX';
-  final String _soignant = 'Dr. Ndetereyuwe';
-  final String _hopital = 'Centre Hospitalier Congo-Chine';
-  final String _dateDebut = '06 mars 2026';
-  final String _prochainRdv = '20 avril 2026';
-  final double _observance = 0.87;
-  final int _joursActifs = 26;
-  final int _totalJours = 30;
+  // ── MÉTHODES ──────────────────────────────────────────────────────────────
 
-  // Historique simulé — true = pris, false = manqué
-  final List<bool> _historique = [
-    true, true, true, false, true, true, true,
-    true, true, false, true, true, true, true,
-    true, true, true, true, true, false, true,
-    true, true, true, true, true, true, true,
-    true, false,
-  ];
+  void _ouvrirParametres() {
+    // TODO : naviguer vers ParametresScreen quand le fichier est créé
+    // Navigator.push(context, MaterialPageRoute(builder: (_) => const ParametresScreen()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppTranslations.t('parametres')),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _changerLangue() {
+    final lang = context.read<LangueProvider>();
+    final t = AppTranslations.t;
+
+    final langues = [
+      {'code': 'fr', 'label': t('francais'), 'flag': '🇫🇷', 'native': 'Français'},
+      {'code': 'en', 'label': t('anglais'),  'flag': '🇬🇧', 'native': 'English'},
+      {'code': 'sw', 'label': t('swahili'),  'flag': '🇨🇩', 'native': 'Kiswahili'},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(t('choisir_langue_titre')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: langues.map((l) {
+            final selectionne = lang.code == l['code'];
+            return ListTile(
+              leading: Text(l['flag']!, style: const TextStyle(fontSize: 22)),
+              title: Text(l['label']!),
+              subtitle: Text(l['native']!,
+                  style: const TextStyle(fontSize: 12)),
+              trailing: selectionne
+                  ? const Icon(Icons.check_circle_rounded,
+                  color: AppColors.primary)
+                  : null,
+              onTap: () {
+                lang.changerLangue(l['code']!);
+                Navigator.pop(context);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _deconnecter() {
+    final t = AppTranslations.t;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(t('deconnecter'),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: const Text(
+          'Vous devrez vous reconnecter avec votre numéro de téléphone.',
+          style: TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(t('annuler'),
+                style: const TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await SessionService().deconnecter();
+              context.read<PatientProvider>().reinitialiser();
+              if (!mounted) return;
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/role', (route) => false,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(t('deconnecter')),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+
+    // ── Données depuis PatientProvider (SQLite) ──────────────────────────
+    final patient = context.watch<PatientProvider>();
+    final t = AppTranslations.t;
+
+    final initiales = patient.nom.isNotEmpty
+        ? patient.nom.trim().split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .take(2).join().toUpperCase()
+        : 'CS';
+
+    final observance = patient.observance / 100;
+    final joursActifs = patient.joursActifs;
+    final totalPrises = patient.historique.length;
+    final priseManquees = totalPrises - joursActifs;
+
+    // Construit l'historique depuis les prises SQLite
+    final historiqueMap = patient.historique;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: CustomScrollView(
         slivers: [
 
-          // En-tête avec avatar
+          // ── En-tête ─────────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
               decoration: const BoxDecoration(
@@ -62,13 +166,13 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   child: Column(
                     children: [
 
-                      // Ligne titre + paramètres
+                      // Titre + paramètres
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Mon profil',
-                            style: TextStyle(
+                          Text(
+                            t('profil'),
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
@@ -77,16 +181,14 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           GestureDetector(
                             onTap: _ouvrirParametres,
                             child: Container(
-                              width: 38,
-                              height: 38,
+                              width: 38, height: 38,
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(
                                 Icons.settings_outlined,
-                                color: Colors.white,
-                                size: 20,
+                                color: Colors.white, size: 20,
                               ),
                             ),
                           ),
@@ -95,14 +197,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Avatar + infos
+                      // Avatar + nom + numéro
                       Row(
                         children: [
-
-                          // Avatar initiales
                           Container(
-                            width: 70,
-                            height: 70,
+                            width: 70, height: 70,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: Colors.white.withValues(alpha: 0.2),
@@ -111,10 +210,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                 width: 2,
                               ),
                             ),
-                            child: const Center(
+                            child: Center(
                               child: Text(
-                                'CN',
-                                style: TextStyle(
+                                initiales,
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 22,
                                   fontWeight: FontWeight.w700,
@@ -122,16 +221,15 @@ class _ProfilScreenState extends State<ProfilScreen> {
                               ),
                             ),
                           ),
-
                           const SizedBox(width: 16),
-
-                          // Nom et badge
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _nom,
+                                  patient.nom.isNotEmpty
+                                      ? patient.nom
+                                      : 'Patient',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
@@ -140,7 +238,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  _telephone,
+                                  patient.numero.isNotEmpty
+                                      ? '+243 ${patient.numero}'
+                                      : '--',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.7),
                                     fontSize: 13,
@@ -149,8 +249,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                 const SizedBox(height: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
+                                    horizontal: 10, vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
                                     color: Colors.white.withValues(alpha: 0.2),
@@ -160,7 +259,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                     ),
                                   ),
                                   child: Text(
-                                    'Observance ${(_observance * 100).toInt()}%',
+                                    '${t('observance')} ${patient.observance.toInt()}%',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
@@ -171,7 +270,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
                               ],
                             ),
                           ),
-
                         ],
                       ),
 
@@ -182,34 +280,34 @@ class _ProfilScreenState extends State<ProfilScreen> {
             ),
           ),
 
-          // Contenu
+          // ── Contenu ──────────────────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
 
-                // Stats résumées
+                // Stats
                 Row(
                   children: [
                     _CarteStatProfil(
-                      valeur: '$_joursActifs',
-                      label: 'Jours actifs',
+                      valeur: '$joursActifs',
+                      label: t('jours_actifs'),
                       icone: Icons.check_circle_outline,
                       couleur: AppColors.success,
                       fond: const Color(0xFFE8F5E9),
                     ),
                     const SizedBox(width: 12),
                     _CarteStatProfil(
-                      valeur: '${_totalJours - _joursActifs}',
-                      label: 'Prises manquées',
+                      valeur: '${priseManquees < 0 ? 0 : priseManquees}',
+                      label: t('prises_manquees'),
                       icone: Icons.cancel_outlined,
                       couleur: AppColors.danger,
                       fond: const Color(0xFFFFEBEE),
                     ),
                     const SizedBox(width: 12),
                     _CarteStatProfil(
-                      valeur: '$_totalJours',
-                      label: 'Jours total',
+                      valeur: '$totalPrises',
+                      label: t('jours_total'),
                       icone: Icons.calendar_month_outlined,
                       couleur: AppColors.primary,
                       fond: AppColors.primaryPale,
@@ -220,7 +318,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 const SizedBox(height: 24),
 
                 // Mon traitement
-                _titreSec('Mon traitement'),
+                _TitreSec(t('mon_traitement')),
                 const SizedBox(height: 12),
 
                 Container(
@@ -238,35 +336,26 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   ),
                   child: Column(
                     children: [
-                      _ligneInfo(
+                      _LigneInfo(
                         icone: Icons.medication_outlined,
                         label: 'Protocole',
-                        valeur: 'Lam. + Efa. + Tén.',
+                        valeur: patient.traitements.isNotEmpty
+                            ? (patient.traitements.first['nom_medicament']
+                        as String? ??
+                            '—')
+                            : '—',
                         dernier: false,
                       ),
-                      _ligneInfo(
-                        icone: Icons.calendar_today_outlined,
-                        label: 'Début du traitement',
-                        valeur: _dateDebut,
-                        dernier: false,
-                      ),
-                      _ligneInfo(
-                        icone: Icons.event_outlined,
-                        label: 'Prochain RDV',
-                        valeur: _prochainRdv,
-                        couleurValeur: AppColors.primary,
-                        dernier: false,
-                      ),
-                      _ligneInfo(
+                      _LigneInfo(
                         icone: Icons.person_outline,
                         label: 'Soignant',
-                        valeur: _soignant,
+                        valeur: 'Dr. Ndetereyuwe',
                         dernier: false,
                       ),
-                      _ligneInfo(
+                      _LigneInfo(
                         icone: Icons.local_hospital_outlined,
                         label: 'Hôpital',
-                        valeur: _hopital,
+                        valeur: 'C.H. Congo-Chine',
                         dernier: true,
                       ),
                     ],
@@ -279,18 +368,16 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _titreSec('Historique 30 jours'),
+                    _TitreSec(t('historique')),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppColors.primaryPale,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${(_observance * 100).toInt()}% observance',
+                        '${patient.observance.toInt()}% ${t('observance')}',
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.primary,
@@ -317,9 +404,19 @@ class _ProfilScreenState extends State<ProfilScreen> {
                       ),
                     ],
                   ),
-                  child: Column(
+                  child: historiqueMap.isEmpty
+                      ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'Aucune prise enregistrée',
+                        style: const TextStyle(
+                            color: AppColors.textSecondary),
+                      ),
+                    ),
+                  )
+                      : Column(
                     children: [
-
                       // Jours de la semaine
                       Row(
                         children: ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -337,10 +434,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
                         ))
                             .toList(),
                       ),
-
                       const SizedBox(height: 8),
-
-                      // Grille des 30 jours
+                      // Grille depuis les vraies prises SQLite
                       GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -350,20 +445,20 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           crossAxisSpacing: 4,
                           mainAxisSpacing: 4,
                         ),
-                        itemCount: _historique.length,
-                        itemBuilder: (context, index) {
-                          final pris = _historique[index];
-                          final jour = DateTime.now()
-                              .subtract(Duration(
-                            days: _historique.length - 1 - index,
-                          ))
-                              .day;
+                        itemCount:
+                        historiqueMap.length.clamp(0, 30),
+                        itemBuilder: (context, i) {
+                          final prise = historiqueMap[i];
+                          final estPris = prise['statut'] == 'pris';
+                          final date = DateTime.tryParse(
+                              prise['date_heure'] as String? ?? '');
+                          final jour = date?.day ?? (i + 1);
 
                           return Tooltip(
-                            message: pris ? 'Pris' : 'Manqué',
+                            message: estPris ? 'Pris' : 'Manqué',
                             child: Container(
                               decoration: BoxDecoration(
-                                color: pris
+                                color: estPris
                                     ? AppColors.primary
                                     : const Color(0xFFFFCDD2),
                                 borderRadius: BorderRadius.circular(5),
@@ -373,7 +468,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                   '$jour',
                                   style: TextStyle(
                                     fontSize: 9,
-                                    color: pris
+                                    color: estPris
                                         ? Colors.white
                                         : AppColors.danger,
                                     fontWeight: FontWeight.w600,
@@ -384,23 +479,20 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           );
                         },
                       ),
-
                       const SizedBox(height: 12),
-
                       // Légende
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _legendeCal(AppColors.primary, 'Pris'),
+                          _LegendeCal(AppColors.primary, 'Pris'),
                           const SizedBox(width: 20),
-                          _legendeCal(
+                          _LegendeCal(
                             const Color(0xFFFFCDD2),
                             'Manqué',
                             textColor: AppColors.danger,
                           ),
                         ],
                       ),
-
                     ],
                   ),
                 ),
@@ -408,7 +500,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 const SizedBox(height: 24),
 
                 // Paramètres
-                _titreSec('Paramètres'),
+                _TitreSec(t('parametres')),
                 const SizedBox(height: 12),
 
                 Container(
@@ -426,39 +518,41 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   ),
                   child: Column(
                     children: [
-                      _optionParametre(
+                      _OptionParametre(
                         icone: Icons.language_outlined,
                         couleurIcone: AppColors.primary,
                         fond: AppColors.primaryPale,
-                        label: 'Langue de l\'application',
-                        valeur: 'Français',
-                        onTap: () {},
+                        label: t('changer_langue'),
+                        valeur: context.watch<LangueProvider>().code == 'fr'
+                            ? 'Français'
+                            : context.watch<LangueProvider>().code == 'en'
+                            ? 'English'
+                            : 'Kiswahili',
+                        onTap: _changerLangue,
                         dernier: false,
                       ),
-                      _optionParametre(
+                      _OptionParametre(
                         icone: Icons.shield_outlined,
                         couleurIcone: const Color(0xFF263238),
                         fond: const Color(0xFFECEFF1),
-                        label: 'Mode discrétion',
+                        label: t('discretion'),
                         valeur: 'Configuré',
                         onTap: () {},
                         dernier: false,
                       ),
-                      _optionParametre(
-                        icone: Icons.notifications_outlined,
-                        couleurIcone: AppColors.warning,
-                        fond: const Color(0xFFFFF8E1),
-                        label: 'Notifications',
-                        valeur: 'Activées',
-                        onTap: () {},
-                        dernier: false,
-                      ),
-                      _optionParametre(
+                      _OptionParametre(
                         icone: Icons.lock_outline,
                         couleurIcone: AppColors.success,
                         fond: const Color(0xFFE8F5E9),
-                        label: 'Changer le PIN',
-                        onTap: () {},
+                        label: t('changer_pin'),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PinScreen(),
+                            ),
+                          );
+                        },
                         dernier: true,
                       ),
                     ],
@@ -473,14 +567,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   height: 52,
                   child: OutlinedButton.icon(
                     onPressed: _deconnecter,
-                    icon: const Icon(
-                      Icons.logout,
-                      size: 18,
-                      color: AppColors.danger,
-                    ),
-                    label: const Text(
-                      'Se déconnecter',
-                      style: TextStyle(
+                    icon: const Icon(Icons.logout,
+                        size: 18, color: AppColors.danger),
+                    label: Text(
+                      t('deconnecter'),
+                      style: const TextStyle(
                         color: AppColors.danger,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -488,12 +579,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     ),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(
-                        color: AppColors.danger,
-                        width: 1.5,
-                      ),
+                          color: AppColors.danger, width: 1.5),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
                 ),
@@ -508,230 +596,135 @@ class _ProfilScreenState extends State<ProfilScreen> {
       ),
     );
   }
+}
 
-  // Ouvre les paramètres
-  void _ouvrirParametres() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Paramètres — prochaine étape'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+//  Widgets utilitaires
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // Déconnexion avec confirmation
-  void _deconnecter() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          'Se déconnecter ?',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: const Text(
-          'Vous devrez vous reconnecter avec '
-              'votre numéro de téléphone.',
-          style: TextStyle(fontSize: 14, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Annuler',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              // Ferme tous les écrans et va vers /role
-              Navigator.of(context).pushNamedAndRemoveUntil(
-                '/role',
-                    (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Se déconnecter'),
-          ),
-        ],
-      ),
-    );
-  }
+class _TitreSec extends StatelessWidget {
+  final String texte;
+  const _TitreSec(this.texte);
 
-  // Helpers
-  Widget _titreSec(String titre) {
-    return Text(
-      titre,
-      style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
-        letterSpacing: 0.2,
-      ),
-    );
-  }
+  @override
+  Widget build(BuildContext context) => Text(
+    texte,
+    style: const TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      color: AppColors.textPrimary,
+      letterSpacing: 0.2,
+    ),
+  );
+}
 
-  Widget _ligneInfo({
-    required IconData icone,
-    required String label,
-    required String valeur,
-    Color? couleurValeur,
-    required bool dernier,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 14,
-      ),
+class _LigneInfo extends StatelessWidget {
+  final IconData icone;
+  final String label, valeur;
+  final bool dernier;
+
+  const _LigneInfo({
+    required this.icone,
+    required this.label,
+    required this.valeur,
+    required this.dernier,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    decoration: BoxDecoration(
+      border: dernier
+          ? null
+          : const Border(
+          bottom:
+          BorderSide(color: Color(0xFFF0F4F8), width: 1)),
+    ),
+    child: Row(
+      children: [
+        Icon(icone, size: 18, color: AppColors.primary),
+        const SizedBox(width: 12),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 13, color: AppColors.textSecondary)),
+        const Spacer(),
+        Text(valeur,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            )),
+      ],
+    ),
+  );
+}
+
+class _OptionParametre extends StatelessWidget {
+  final IconData icone;
+  final Color couleurIcone, fond;
+  final String label;
+  final String? valeur;
+  final VoidCallback onTap;
+  final bool dernier;
+
+  const _OptionParametre({
+    required this.icone,
+    required this.couleurIcone,
+    required this.fond,
+    required this.label,
+    this.valeur,
+    required this.onTap,
+    required this.dernier,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         border: dernier
             ? null
             : const Border(
-          bottom: BorderSide(
-            color: Color(0xFFF0F4F8),
-            width: 1,
-          ),
-        ),
+            bottom:
+            BorderSide(color: Color(0xFFF0F4F8), width: 1)),
       ),
       child: Row(
         children: [
-          Icon(icone, size: 18, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: fond,
+              borderRadius: BorderRadius.circular(10),
             ),
+            child: Icon(icone, size: 18, color: couleurIcone),
           ),
-          const Spacer(),
-          Text(
-            valeur,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: couleurValeur ?? AppColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _optionParametre({
-    required IconData icone,
-    required Color couleurIcone,
-    required Color fond,
-    required String label,
-    String? valeur,
-    required VoidCallback onTap,
-    required bool dernier,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
-        decoration: BoxDecoration(
-          border: dernier
-              ? null
-              : const Border(
-            bottom: BorderSide(
-              color: Color(0xFFF0F4F8),
-              width: 1,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: fond,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icone, size: 18, color: couleurIcone),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(label,
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: AppColors.textPrimary,
-                ),
-              ),
-            ),
-            if (valeur != null)
-              Text(
-                valeur,
+                )),
+          ),
+          if (valeur != null)
+            Text(valeur!,
                 style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: AppColors.textSecondary,
-            ),
-          ],
-        ),
+                    fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(width: 6),
+          const Icon(Icons.chevron_right,
+              size: 18, color: AppColors.textSecondary),
+        ],
       ),
-    );
-  }
-
-  Widget _legendeCal(
-      Color couleur,
-      String label, {
-        Color? textColor,
-      }) {
-    return Row(
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: couleur,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: textColor ?? AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
+    ),
+  );
 }
 
-// Carte statistique du profil
 class _CarteStatProfil extends StatelessWidget {
-  final String valeur;
-  final String label;
+  final String valeur, label;
   final IconData icone;
-  final Color couleur;
-  final Color fond;
+  final Color couleur, fond;
 
   const _CarteStatProfil({
     required this.valeur,
@@ -742,58 +735,75 @@ class _CarteStatProfil extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          vertical: 14,
-          horizontal: 10,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE0E7EF)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE0E7EF)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: fond,
+              borderRadius: BorderRadius.circular(10),
             ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: fond,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icone, size: 18, color: couleur),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              valeur,
+            child: Icon(icone, size: 18, color: couleur),
+          ),
+          const SizedBox(height: 8),
+          Text(valeur,
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: couleur,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
+              )),
+          const SizedBox(height: 3),
+          Text(label,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 10,
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+              )),
+        ],
+      ),
+    ),
+  );
+}
+
+class _LegendeCal extends StatelessWidget {
+  final Color couleur;
+  final String label;
+  final Color? textColor;
+
+  const _LegendeCal(this.couleur, this.label, {this.textColor});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 12, height: 12,
+        decoration: BoxDecoration(
+          color: couleur,
+          borderRadius: BorderRadius.circular(3),
         ),
       ),
-    );
-  }
+      const SizedBox(width: 6),
+      Text(label,
+          style: TextStyle(
+            fontSize: 12,
+            color: textColor ?? AppColors.textSecondary,
+          )),
+    ],
+  );
 }

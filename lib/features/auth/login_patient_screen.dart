@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
 import 'mot_de_passe_screen.dart';
+import '../../core/services/biometric_service.dart';
 import 'package:confidantsante/features/patient/dashboard_patient_screen.dart';
 class LoginPatientScreen extends StatefulWidget {
   const LoginPatientScreen({super.key});
@@ -626,6 +627,8 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
 // ── ÉCRAN VÉRIFICATION PIN ───────────────────────────────────────────────────
 
+
+
 class PinVerificationScreen extends StatefulWidget {
   const PinVerificationScreen({super.key});
 
@@ -634,12 +637,51 @@ class PinVerificationScreen extends StatefulWidget {
       _PinVerificationScreenState();
 }
 
-class _PinVerificationScreenState
-    extends State<PinVerificationScreen> {
+class _PinVerificationScreenState extends State<PinVerificationScreen> {
 
   String _pin = '';
   bool _erreur = false;
   int _tentatives = 0;
+  bool _biometrieDisponible = false;
+  String _typeBiometrie = 'none';
+
+  @override
+  void initState() {
+    super.initState();
+    _verifierBiometrie();
+  }
+
+  Future<void> _verifierBiometrie() async {
+    final dispo = await BiometricService().isDisponible();
+    final type = await BiometricService().getTypeBiometrie();
+    if (mounted) {
+      setState(() {
+        _biometrieDisponible = dispo;
+        _typeBiometrie = type;
+      });
+      // Propose automatiquement la biométrie au premier affichage
+      if (dispo) {
+        Future.delayed(const Duration(milliseconds: 500), _authentifierBiometrie);
+      }
+    }
+  }
+
+  Future<void> _authentifierBiometrie() async {
+    final raison = _typeBiometrie == 'face'
+        ? 'Utilisez Face ID pour accéder à ConfidantSanté'
+        : 'Utilisez votre empreinte pour accéder à ConfidantSanté';
+
+    final ok = await BiometricService().authentifier(raison: raison);
+    if (!mounted) return;
+
+    if (ok) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardPatientScreen()),
+      );
+    }
+    // Si échec, l'utilisateur peut utiliser le PIN
+  }
 
   void _ajouterChiffre(String c) {
     if (_pin.length >= 4) return;
@@ -665,9 +707,7 @@ class _PinVerificationScreenState
     if (ok) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const DashboardPatientScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const DashboardPatientScreen()),
       );
     } else {
       setState(() {
@@ -680,24 +720,6 @@ class _PinVerificationScreenState
 
   @override
   Widget build(BuildContext context) {
-    return _buildEcranPin(
-      titre: 'Entrez votre PIN',
-      sousTitre: 'Votre code à 4 chiffres',
-      pin: _pin,
-      erreur: _erreur,
-      messageErreur: _tentatives >= 3
-          ? 'Trop de tentatives. Reconnectez-vous.'
-          : 'PIN incorrect. Réessayez.',
-    );
-  }
-
-  Widget _buildEcranPin({
-    required String titre,
-    required String sousTitre,
-    required String pin,
-    required bool erreur,
-    required String messageErreur,
-  }) {
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: SafeArea(
@@ -716,10 +738,8 @@ class _PinVerificationScreenState
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(
-                      Icons.arrow_back_ios_new,
-                      color: Colors.white, size: 16,
-                    ),
+                    child: const Icon(Icons.arrow_back_ios_new,
+                        color: Colors.white, size: 16),
                   ),
                 ),
               ),
@@ -727,23 +747,22 @@ class _PinVerificationScreenState
 
             const Spacer(),
 
+            // Icône
             Container(
               width: 64, height: 64,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: const Icon(
-                Icons.pin_outlined,
-                color: Colors.white, size: 32,
-              ),
+              child: const Icon(Icons.pin_outlined,
+                  color: Colors.white, size: 32),
             ),
 
             const SizedBox(height: 20),
 
-            Text(
-              titre,
-              style: const TextStyle(
+            const Text(
+              'Entrez votre PIN',
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
@@ -753,7 +772,7 @@ class _PinVerificationScreenState
             const SizedBox(height: 8),
 
             Text(
-              sousTitre,
+              'Votre code à 4 chiffres',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 14,
@@ -762,35 +781,35 @@ class _PinVerificationScreenState
 
             const SizedBox(height: 8),
 
+            // Message erreur
             AnimatedOpacity(
-              opacity: erreur ? 1 : 0,
+              opacity: _erreur ? 1 : 0,
               duration: const Duration(milliseconds: 200),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 40),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8,
-                ),
+                    horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  messageErreur,
+                  _tentatives >= 3
+                      ? 'Trop de tentatives. Reconnectez-vous.'
+                      : 'PIN incorrect. Réessayez.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                 ),
               ),
             ),
 
             const SizedBox(height: 32),
 
+            // Points PIN
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(4, (i) {
-                final rempli = i < pin.length;
+                final rempli = i < _pin.length;
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   margin: const EdgeInsets.symmetric(horizontal: 10),
@@ -811,8 +830,9 @@ class _PinVerificationScreenState
 
             const Spacer(),
 
+            // Clavier numérique
             Padding(
-              padding: const EdgeInsets.fromLTRB(40, 0, 40, 40),
+              padding: const EdgeInsets.fromLTRB(40, 0, 40, 16),
               child: Column(
                 children: [
                   _rangee(['1', '2', '3']),
@@ -824,8 +844,35 @@ class _PinVerificationScreenState
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const SizedBox(width: 70),
+
+                      // Bouton biométrie (si disponible) ou espace vide
+                      SizedBox(
+                        width: 70, height: 70,
+                        child: _biometrieDisponible
+                            ? GestureDetector(
+                          onTap: _authentifierBiometrie,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Icon(
+                              _typeBiometrie == 'face'
+                                  ? Icons.face_outlined
+                                  : Icons.fingerprint_rounded,
+                              color: Colors.white, size: 28,
+                            ),
+                          ),
+                        )
+                            : const SizedBox(),
+                      ),
+
                       _touche('0'),
+
+                      // Supprimer
                       SizedBox(
                         width: 70, height: 70,
                         child: GestureDetector(
@@ -835,10 +882,8 @@ class _PinVerificationScreenState
                               color: Colors.white.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(18),
                             ),
-                            child: const Icon(
-                              Icons.backspace_outlined,
-                              color: Colors.white, size: 22,
-                            ),
+                            child: const Icon(Icons.backspace_outlined,
+                                color: Colors.white, size: 22),
                           ),
                         ),
                       ),
@@ -848,44 +893,52 @@ class _PinVerificationScreenState
               ),
             ),
 
+            // Lien "Code oublié"
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Code oublié ? Se reconnecter',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 13,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
           ],
         ),
       ),
     );
   }
 
-  Widget _rangee(List<String> chiffres) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: chiffres.map((c) => _touche(c)).toList(),
-    );
-  }
+  Widget _rangee(List<String> chiffres) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: chiffres.map(_touche).toList(),
+  );
 
-  Widget _touche(String label) {
-    return GestureDetector(
-      onTap: () => _ajouterChiffre(label),
-      child: Container(
-        width: 70, height: 70,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
-          ),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w500,
-            ),
+  Widget _touche(String label) => GestureDetector(
+    onTap: () => _ajouterChiffre(label),
+    child: Container(
+      width: 70, height: 70,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // Import nécessaire

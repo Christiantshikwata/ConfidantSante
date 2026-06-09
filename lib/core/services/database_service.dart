@@ -22,10 +22,18 @@ class DatabaseService {
 
     return await openDatabase(
       cheminComplet,
-      version: 1,
       onCreate: _creerTables,
+      version: 3,
+        onUpgrade: (db, oldVersion, newVersion) async {
+   if (oldVersion < 2) {
+      await db.execute('CREATE TABLE IF NOT EXISTS rendez_vous ...');    }
+     if (oldVersion < 3) {
+      await db.execute('CREATE TABLE IF NOT EXISTS soignants ...');
+     await db.execute("INSERT OR IGNORE INTO soignants ...");}
+   },
     );
   }
+
 
   // Crée toutes les tables au premier lancement
   Future<void> _creerTables(Database db, int version) async {
@@ -83,6 +91,40 @@ class DatabaseService {
         FOREIGN KEY (patient_id) REFERENCES patients(id)
       )
     ''');
+    await db.execute('''
+    CREATE TABLE IF NOT EXISTS rendez_vous (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      patient_id  INTEGER NOT NULL,
+      motif       TEXT    NOT NULL,
+      lieu        TEXT    DEFAULT '',
+      date        TEXT    NOT NULL,
+      statut      TEXT    DEFAULT 'planifie',
+      FOREIGN KEY (patient_id) REFERENCES patients(id)
+    )
+  ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS soignants (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        nom           TEXT    NOT NULL,
+        matricule     TEXT    NOT NULL UNIQUE,
+        mot_de_passe  TEXT    NOT NULL,
+        specialite    TEXT    DEFAULT 'Médecin',
+        service       TEXT    DEFAULT 'VIH/SIDA',
+        date_creation TEXT
+      )
+    ''');
+    await db.insert(
+      'soignants',
+      {
+        'nom':          'Dr. Yves Ndetereyuwe',
+        'matricule':    'MED-2024-001',
+        'mot_de_passe': 'soignant123',
+        'specialite':   'Médecin infectiologue',
+        'service':      'VIH/SIDA',
+        'date_creation': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
   }
 
   // ── PATIENTS ──────────────────────────────────────────────────────────────
@@ -257,7 +299,108 @@ class DatabaseService {
   }
 
   // ── TRAITEMENTS ───────────────────────────────────────────────────────────
+  /// Récupère tous les rendez-vous d'un patient
+  Future<List<Map<String, dynamic>>> getRendezVous(int patientId) async {
+    final db = await database;
+    return await db.query(
+      'rendez_vous',
+      where: 'patient_id = ?',
+      whereArgs: [patientId],
+      orderBy: 'date ASC',
+    );
+  }
 
+  /// Supprime un rendez-vous par son id
+  Future<void> supprimerRendezVous(int id) async {
+    final db = await database;
+    await db.delete('rendez_vous', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Prochain rendez-vous d'un patient (pour le dashboard)
+  Future<Map<String, dynamic>?> getProchainRendezVous(int patientId) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    final res = await db.query(
+      'rendez_vous',
+      where: 'patient_id = ? AND date > ?',
+      whereArgs: [patientId, now],
+      orderBy: 'date ASC',
+      limit: 1,
+    );
+    return res.isNotEmpty ? res.first : null;
+  }
+    // ── SOIGNANTS ─────────────────────────────────────────────────────────────
+
+    /// Vérifie les identifiants du soignant
+    Future<Map<String, dynamic>?> connecterSoignant({
+      required String matricule,
+      required String motDePasse,
+    }) async {
+      final db = await database;
+      final res = await db.query(
+        'soignants',
+        where: 'matricule = ? AND mot_de_passe = ?',
+        whereArgs: [matricule, motDePasse],
+      );
+      return res.isNotEmpty ? res.first : null;
+    }
+
+    /// Récupère tous les patients (pour le dashboard soignant)
+    Future<List<Map<String, dynamic>>> getTousPatients() async {
+      final db = await database;
+      return await db.query('patients', orderBy: 'nom ASC');
+    }
+
+    /// Crée un patient depuis le dashboard soignant
+    Future<int> creerPatientParSoignant({
+      required String nom,
+      required String numero,
+      required String motDePasse,
+      String? soignant,
+      String? hopital,
+    }) async {
+      final db = await database;
+      return await db.insert(
+        'patients',
+        {
+          'nom':          nom,
+          'numero':       numero,
+          'mot_de_passe': motDePasse,
+          'soignant':     soignant ?? 'Dr. Yves Ndetereyuwe',
+          'hopital':      hopital ?? 'Centre Hospitalier Congo-Chine',
+          'date_creation': DateTime.now().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+
+    /// Calcule le taux d'observance d'un patient spécifique
+    Future<double> getObservancePatient(int patientId) async {
+      return await getTauxObservance(patientId);
+    }
+
+    /// Vérifie si un numéro de patient existe déjà
+    Future<bool> numeroExiste(String numero) async {
+      return await patientExiste(numero);
+    }
+
+    // ── RENDEZ-VOUS ──────────────────────────────────────────────────────────
+
+  Future<int> ajouterRendezVous({
+    required int patientId,
+    required String motif,
+    required String lieu,
+    required String date,
+  }) async {
+    final db = await database;
+    return await db.insert('rendez_vous', {
+      'patient_id': patientId,
+      'motif':      motif,
+      'lieu':       lieu,
+      'date':       date,
+      'statut':     'planifie',
+    });
+  }
   // Ajoute un traitement
   Future<int> ajouterTraitement({
     required int patientId,

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import 'login_patient_screen.dart';
-import '../soignant/dashboard_soignant_screen.dart';
+import 'login_soignant_screen.dart';
+//import '../soignant/dashboard_soignant_screen.dart';
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key});
 
@@ -304,46 +305,3 @@ class _CarteRole extends StatelessWidget {
   }
 }
 
-// Placeholders — on les codera dans les prochaines étapes
-
-
-class LoginSoignantScreen extends StatelessWidget {
-  const LoginSoignantScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                const DashboardSoignantScreen(),
-              ),
-            );
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0288D1),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 32, vertical: 16,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          child: const Text(
-            'Accéder au tableau de bord soignant',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -1,30 +1,10 @@
+
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
-
-// Modèle de données pour un patient
-class PatientModel {
-  final String id;
-  final String nom;
-  final String initiales;
-  final String protocole;
-  final double observance;
-  final String dernierePrise;
-  final bool enAlerte;
-  final String statut;
-  final Color couleurAvatar;
-
-  const PatientModel({
-    required this.id,
-    required this.nom,
-    required this.initiales,
-    required this.protocole,
-    required this.observance,
-    required this.dernierePrise,
-    required this.enAlerte,
-    required this.statut,
-    required this.couleurAvatar,
-  });
-}
+import '../../core/services/database_service.dart';
+import '../../core/services/session_service.dart';
+import '../messagerie/messagerie_screen.dart';
+import 'ajouter_patient_screen.dart';
 
 class DashboardSoignantScreen extends StatefulWidget {
   const DashboardSoignantScreen({super.key});
@@ -34,66 +14,59 @@ class DashboardSoignantScreen extends StatefulWidget {
       _DashboardSoignantScreenState();
 }
 
-class _DashboardSoignantScreenState
-    extends State<DashboardSoignantScreen> {
+class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
 
   int _pageActive = 0;
+  String _nomSoignant = 'Dr.';
+  List<Map<String, dynamic>> _patients = [];
+  bool _isLoading = true;
 
-  // Données simulées des patients
-  final List<PatientModel> _patients = const [
-    PatientModel(
-      id: '1',
-      nom: 'Christian Ngoy',
-      initiales: 'CN',
-      protocole: 'Lam. + Efa. + Tén.',
-      observance: 0.87,
-      dernierePrise: "Aujourd'hui 08h00",
-      enAlerte: false,
-      statut: 'Actif',
-      couleurAvatar: AppColors.primary,
-    ),
-    PatientModel(
-      id: '2',
-      nom: 'K. Mukendi',
-      initiales: 'KM',
-      protocole: 'Lam. + Névi.',
-      observance: 0.42,
-      dernierePrise: 'Il y a 3 jours',
-      enAlerte: true,
-      statut: 'En retard',
-      couleurAvatar: AppColors.danger,
-    ),
-    PatientModel(
-      id: '3',
-      nom: 'M. Ntumba',
-      initiales: 'MN',
-      protocole: 'Efa. + Tén.',
-      observance: 0.68,
-      dernierePrise: 'Hier 21h00',
-      enAlerte: true,
-      statut: 'Attention',
-      couleurAvatar: AppColors.warning,
-    ),
-    PatientModel(
-      id: '4',
-      nom: 'B. Kalenda',
-      initiales: 'BK',
-      protocole: 'Lam. + Efa.',
-      observance: 0.95,
-      dernierePrise: "Aujourd'hui 21h00",
-      enAlerte: false,
-      statut: 'Excellent',
-      couleurAvatar: AppColors.success,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _chargerDonnees();
+  }
+
+  Future<void> _chargerDonnees() async {
+    setState(() => _isLoading = true);
+    try {
+      final nom = await SessionService().getSoignantNom();
+      final patients = await DatabaseService().getTousPatients();
+
+      // Pour chaque patient, calcule son observance
+      final patientsAvecObservance = await Future.wait(
+        patients.map((p) async {
+          final obs = await DatabaseService()
+              .getObservancePatient(p['id'] as int);
+          return {...p, 'observance': obs};
+        }),
+      );
+
+      setState(() {
+        _nomSoignant = nom ?? 'Dr. Ndetereyuwe';
+        _patients = patientsAvecObservance;
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: _pageActive == 0
-          ? _PageAccueilSoignant(patients: _patients)
-          : _PagePatientsSoignant(patients: _patients),
+          ? _PageAccueil(
+        nomSoignant: _nomSoignant,
+        patients: _patients,
+        isLoading: _isLoading,
+        onRefresh: _chargerDonnees,
+      )
+          : _PagePatients(
+        patients: _patients,
+        isLoading: _isLoading,
+        onRefresh: _chargerDonnees,
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -120,9 +93,7 @@ class _DashboardSoignantScreenState
           selectedItemColor: const Color(0xFF0288D1),
           unselectedItemColor: const Color(0xFF94A3B8),
           selectedLabelStyle: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
+              fontSize: 11, fontWeight: FontWeight.w600),
           unselectedLabelStyle: const TextStyle(fontSize: 11),
           items: const [
             BottomNavigationBarItem(
@@ -142,195 +113,21 @@ class _DashboardSoignantScreenState
   }
 }
 
-// ── PAGE ACCUEIL SOIGNANT ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  PAGE ACCUEIL SOIGNANT
+// ─────────────────────────────────────────────────────────────────────────────
+class _PageAccueil extends StatelessWidget {
+  final String nomSoignant;
+  final List<Map<String, dynamic>> patients;
+  final bool isLoading;
+  final VoidCallback onRefresh;
 
-class _PageAccueilSoignant extends StatelessWidget {
-  final List<PatientModel> patients;
-
-  const _PageAccueilSoignant({required this.patients});
-
-  // Patients en alerte
-  List<PatientModel> get _alertes =>
-      patients.where((p) => p.enAlerte).toList();
-
-  // Observance moyenne
-  double get _observanceMoyenne =>
-      patients.fold(0.0, (sum, p) => sum + p.observance) /
-          patients.length;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-
-        // En-tête soignant — bleu cyan distinct du patient
-        SliverToBoxAdapter(
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF01579B),
-                  Color(0xFF0277BD),
-                  Color(0xFF0288D1),
-                ],
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(28),
-                bottomRight: Radius.circular(28),
-              ),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-
-                    // Ligne du haut
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _salutation(),
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.75),
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Dr. Ndetereyuwe',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Badge soignant
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.medical_services_outlined,
-                                color: Colors.white,
-                                size: 14,
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                'Soignant',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // 3 stats rapides
-                    Row(
-                      children: [
-                        _StatSoignant(
-                          valeur: '${patients.length}',
-                          label: 'Patients',
-                          icone: Icons.people_outline,
-                        ),
-                        const SizedBox(width: 8),
-                        _StatSoignant(
-                          valeur: '${_alertes.length}',
-                          label: 'Alertes',
-                          icone: Icons.warning_amber_outlined,
-                          estAlerte: _alertes.isNotEmpty,
-                        ),
-                        const SizedBox(width: 8),
-                        _StatSoignant(
-                          valeur:
-                          '${(_observanceMoyenne * 100).toInt()}%',
-                          label: 'Moy. obs.',
-                          icone: Icons.trending_up,
-                        ),
-                      ],
-                    ),
-
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        SliverPadding(
-          padding: const EdgeInsets.all(20),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-
-              // Section alertes
-              if (_alertes.isNotEmpty) ...[
-                _titreSec('Alertes actives', couleur: AppColors.danger),
-                const SizedBox(height: 12),
-                ..._alertes.map(
-                      (p) => _CarteAlerte(patient: p),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // Section tous les patients
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _titreSec('Tous mes patients'),
-                  Text(
-                    '${patients.length} patients',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Liste patients
-              ...patients.map(
-                    (p) => _LignePatient(patient: p),
-              ),
-
-              const SizedBox(height: 100),
-
-            ]),
-          ),
-        ),
-
-      ],
-    );
-  }
+  const _PageAccueil({
+    required this.nomSoignant,
+    required this.patients,
+    required this.isLoading,
+    required this.onRefresh,
+  });
 
   static String _salutation() {
     final h = DateTime.now().hour;
@@ -339,39 +136,291 @@ class _PageAccueilSoignant extends StatelessWidget {
     return 'Bonsoir Dr.';
   }
 
-  Widget _titreSec(String titre, {Color? couleur}) {
-    return Text(
-      titre,
-      style: TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: couleur ?? AppColors.textPrimary,
-        letterSpacing: 0.2,
+  List<Map<String, dynamic>> get _alertes => patients
+      .where((p) => (p['observance'] as double? ?? 0) < 50)
+      .toList();
+
+  double get _observanceMoyenne {
+    if (patients.isEmpty) return 0;
+    final total = patients.fold<double>(
+        0, (s, p) => s + (p['observance'] as double? ?? 0));
+    return total / patients.length;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: () async => onRefresh(),
+      color: const Color(0xFF0288D1),
+      child: CustomScrollView(
+        slivers: [
+
+          // En-tête
+          SliverToBoxAdapter(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF01579B),
+                    Color(0xFF0277BD),
+                    Color(0xFF0288D1),
+                  ],
+                ),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(28),
+                  bottomRight: Radius.circular(28),
+                ),
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _salutation(),
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.75),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  nomSoignant,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Badge soignant
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.medical_services_outlined,
+                                    color: Colors.white, size: 14),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Soignant',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // 3 stats
+                      Row(
+                        children: [
+                          _StatSoignant(
+                            valeur: '${patients.length}',
+                            label: 'Patients',
+                            icone: Icons.people_outline,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatSoignant(
+                            valeur: '${_alertes.length}',
+                            label: 'Alertes',
+                            icone: Icons.warning_amber_outlined,
+                            estAlerte: _alertes.isNotEmpty,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatSoignant(
+                            valeur: '${_observanceMoyenne.toInt()}%',
+                            label: 'Moy. obs.',
+                            icone: Icons.trending_up,
+                          ),
+                        ],
+                      ),
+
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          SliverPadding(
+            padding: const EdgeInsets.all(20),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+
+                if (isLoading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(
+                          color: Color(0xFF0288D1)),
+                    ),
+                  )
+                else ...[
+
+                  // Alertes
+                  if (_alertes.isNotEmpty) ...[
+                    const Text(
+                      'Alertes actives',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.danger,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ..._alertes.map((p) => _CarteAlerte(patient: p)),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Bouton ajouter patient
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AjouterPatientScreen(),
+                          ),
+                        );
+                        onRefresh();
+                      },
+                      icon: const Icon(Icons.person_add_outlined, size: 20),
+                      label: const Text(
+                        'Ajouter un patient',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0288D1),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Tous les patients
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Tous mes patients',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        '${patients.length} patient${patients.length > 1 ? 's' : ''}',
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  if (patients.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            Icon(Icons.people_outline,
+                                size: 64,
+                                color: const Color(0xFF0288D1)
+                                    .withValues(alpha: 0.3)),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Aucun patient enregistré.\nAjoutez votre premier patient.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: AppColors.textSecondary,
+                                height: 1.6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ...patients.map((p) => _LignePatient(patient: p)),
+
+                ],
+
+                const SizedBox(height: 100),
+
+              ]),
+            ),
+          ),
+
+        ],
       ),
     );
   }
 }
 
-// ── PAGE PATIENTS SOIGNANT ───────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  PAGE PATIENTS
+// ─────────────────────────────────────────────────────────────────────────────
+class _PagePatients extends StatefulWidget {
+  final List<Map<String, dynamic>> patients;
+  final bool isLoading;
+  final VoidCallback onRefresh;
 
-class _PagePatientsSoignant extends StatefulWidget {
-  final List<PatientModel> patients;
-
-  const _PagePatientsSoignant({required this.patients});
+  const _PagePatients({
+    required this.patients,
+    required this.isLoading,
+    required this.onRefresh,
+  });
 
   @override
-  State<_PagePatientsSoignant> createState() =>
-      _PagePatientsSoignantState();
+  State<_PagePatients> createState() => _PagePatientsState();
 }
 
-class _PagePatientsSoignantState
-    extends State<_PagePatientsSoignant> {
-
+class _PagePatientsState extends State<_PagePatients> {
   String _recherche = '';
 
-  List<PatientModel> get _patientsFiltres => widget.patients
-      .where((p) =>
-      p.nom.toLowerCase().contains(_recherche.toLowerCase()))
+  List<Map<String, dynamic>> get _filtres => widget.patients
+      .where((p) => (p['nom'] as String? ?? '')
+      .toLowerCase()
+      .contains(_recherche.toLowerCase()))
       .toList();
 
   @override
@@ -395,13 +444,40 @@ class _PagePatientsSoignantState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Mes patients',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Mes patients',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AjouterPatientScreen(),
+                            ),
+                          );
+                          widget.onRefresh();
+                        },
+                        child: Container(
+                          width: 38, height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.person_add_outlined,
+                            color: Colors.white, size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   // Barre de recherche
@@ -411,28 +487,18 @@ class _PagePatientsSoignantState
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: TextField(
-                      onChanged: (v) =>
-                          setState(() => _recherche = v),
+                      onChanged: (v) => setState(() => _recherche = v),
                       style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textPrimary,
-                      ),
+                          fontSize: 14, color: AppColors.textPrimary),
                       decoration: const InputDecoration(
                         hintText: 'Rechercher un patient...',
                         hintStyle: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: AppColors.textSecondary,
-                          size: 20,
-                        ),
+                            color: AppColors.textSecondary, fontSize: 14),
+                        prefixIcon: Icon(Icons.search,
+                            color: AppColors.textSecondary, size: 20),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
+                            horizontal: 16, vertical: 14),
                       ),
                     ),
                   ),
@@ -442,26 +508,30 @@ class _PagePatientsSoignantState
           ),
         ),
 
-        // Liste des patients
+        // Liste
         Expanded(
-          child: _patientsFiltres.isEmpty
+          child: widget.isLoading
               ? const Center(
+              child: CircularProgressIndicator(
+                  color: Color(0xFF0288D1)))
+              : _filtres.isEmpty
+              ? Center(
             child: Text(
-              'Aucun patient trouvé',
-              style: TextStyle(
+              _recherche.isEmpty
+                  ? 'Aucun patient enregistré.'
+                  : 'Aucun résultat pour "$_recherche"',
+              style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 14,
               ),
             ),
           )
               : ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: _patientsFiltres.length,
-            itemBuilder: (context, index) {
-              return _CartePatientDetail(
-                patient: _patientsFiltres[index],
-              );
-            },
+            padding:
+            const EdgeInsets.fromLTRB(20, 12, 20, 100),
+            itemCount: _filtres.length,
+            itemBuilder: (_, i) =>
+                _CartePatientDetail(patient: _filtres[i]),
           ),
         ),
 
@@ -470,11 +540,12 @@ class _PagePatientsSoignantState
   }
 }
 
-// ── STAT SOIGNANT ────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  WIDGETS COMMUNS
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _StatSoignant extends StatelessWidget {
-  final String valeur;
-  final String label;
+  final String valeur, label;
   final IconData icone;
   final bool estAlerte;
 
@@ -486,57 +557,53 @@ class _StatSoignant extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: estAlerte
-              ? AppColors.danger.withValues(alpha: 0.2)
-              : Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: estAlerte
-              ? Border.all(
-            color: AppColors.danger.withValues(alpha: 0.4),
-          )
-              : null,
-        ),
-        child: Column(
-          children: [
-            Icon(icone, color: Colors.white, size: 18),
-            const SizedBox(height: 6),
-            Text(
-              valeur,
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: estAlerte
+            ? AppColors.danger.withValues(alpha: 0.2)
+            : Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: estAlerte
+            ? Border.all(
+            color: AppColors.danger.withValues(alpha: 0.4))
+            : null,
+      ),
+      child: Column(
+        children: [
+          Icon(icone, color: Colors.white, size: 18),
+          const SizedBox(height: 6),
+          Text(valeur,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-              ),
-            ),
-            Text(
-              label,
+              )),
+          Text(label,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 11,
-              ),
-            ),
-          ],
-        ),
+              )),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
 
-// ── CARTE ALERTE ─────────────────────────────────────────────────────────────
-
 class _CarteAlerte extends StatelessWidget {
-  final PatientModel patient;
-
+  final Map<String, dynamic> patient;
   const _CarteAlerte({required this.patient});
 
   @override
   Widget build(BuildContext context) {
-    final estUrgent = patient.observance < 0.5;
+    final obs = (patient['observance'] as double? ?? 0);
+    final initiales = (patient['nom'] as String? ?? 'P')
+        .split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -545,13 +612,10 @@ class _CarteAlerte extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border(
-          left: BorderSide(
-            color: estUrgent ? AppColors.danger : AppColors.warning,
-            width: 3,
-          ),
-          top: const BorderSide(color: Color(0xFFE0E7EF)),
-          right: const BorderSide(color: Color(0xFFE0E7EF)),
-          bottom: const BorderSide(color: Color(0xFFE0E7EF)),
+          left: BorderSide(color: AppColors.danger, width: 3),
+          top: BorderSide(color: const Color(0xFFE0E7EF)),
+          right: BorderSide(color: const Color(0xFFE0E7EF)),
+          bottom: BorderSide(color: const Color(0xFFE0E7EF)),
         ),
         boxShadow: [
           BoxShadow(
@@ -563,17 +627,15 @@ class _CarteAlerte extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Avatar
           Container(
-            width: 44,
-            height: 44,
+            width: 44, height: 44,
             decoration: BoxDecoration(
-              color: patient.couleurAvatar,
+              color: AppColors.danger,
               shape: BoxShape.circle,
             ),
             child: Center(
               child: Text(
-                patient.initiales,
+                initiales,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -582,88 +644,76 @@ class _CarteAlerte extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  patient.nom,
+                  patient['nom'] as String? ?? '',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 3),
                 Text(
-                  estUrgent
-                      ? 'Dernière prise : ${patient.dernierePrise}'
-                      : 'Observance en baisse : '
-                      '${(patient.observance * 100).toInt()}%',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: estUrgent
-                        ? AppColors.danger
-                        : AppColors.warning,
-                  ),
+                  'Observance : ${obs.toInt()}% — Intervention requise',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.danger),
                 ),
               ],
             ),
           ),
-
-          // Badge
           Container(
             padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 5,
-            ),
+                horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: estUrgent
-                  ? AppColors.danger.withValues(alpha: 0.1)
-                  : AppColors.warning.withValues(alpha: 0.1),
+              color: AppColors.danger.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(
-              estUrgent ? 'Urgent' : 'Attention',
+            child: const Text(
+              'Urgent',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: estUrgent ? AppColors.danger : AppColors.warning,
+                color: AppColors.danger,
               ),
             ),
           ),
-
         ],
       ),
     );
   }
 }
 
-// ── LIGNE PATIENT (liste principale) ─────────────────────────────────────────
-
 class _LignePatient extends StatelessWidget {
-  final PatientModel patient;
-
+  final Map<String, dynamic> patient;
   const _LignePatient({required this.patient});
 
-  Color get _couleurObservance {
-    if (patient.observance >= 0.9) return AppColors.success;
-    if (patient.observance >= 0.7) return AppColors.warning;
+  Color get _couleur {
+    final obs = patient['observance'] as double? ?? 0;
+    if (obs >= 90) return AppColors.success;
+    if (obs >= 70) return AppColors.warning;
     return AppColors.danger;
   }
 
   @override
   Widget build(BuildContext context) {
+    final obs = patient['observance'] as double? ?? 0;
+    final initiales = (patient['nom'] as String? ?? 'P')
+        .split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase();
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                DossierPatientScreen(patient: patient),
+            builder: (_) => DossierPatientScreen(patient: patient),
           ),
         );
       },
@@ -684,17 +734,15 @@ class _LignePatient extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar
             Container(
-              width: 46,
-              height: 46,
+              width: 46, height: 46,
               decoration: BoxDecoration(
-                color: patient.couleurAvatar,
+                color: _couleur,
                 shape: BoxShape.circle,
               ),
               child: Center(
                 child: Text(
-                  patient.initiales,
+                  initiales,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -703,16 +751,13 @@ class _LignePatient extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(width: 14),
-
-            // Infos
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    patient.nom,
+                    patient['nom'] as String? ?? '',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -721,36 +766,34 @@ class _LignePatient extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    patient.protocole,
+                    '+243 ${patient['numero'] ?? ''}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  // Barre observance
                   Row(
                     children: [
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(3),
                           child: LinearProgressIndicator(
-                            value: patient.observance,
+                            value: obs / 100,
                             backgroundColor: const Color(0xFFE0E7EF),
-                            valueColor: AlwaysStoppedAnimation(
-                              _couleurObservance,
-                            ),
+                            valueColor:
+                            AlwaysStoppedAnimation(_couleur),
                             minHeight: 5,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${(patient.observance * 100).toInt()}%',
+                        '${obs.toInt()}%',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: _couleurObservance,
+                          color: _couleur,
                         ),
                       ),
                     ],
@@ -758,16 +801,9 @@ class _LignePatient extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(width: 10),
-
-            // Flèche
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textSecondary,
-              size: 20,
-            ),
-
+            const Icon(Icons.chevron_right,
+                color: AppColors.textSecondary, size: 20),
           ],
         ),
       ),
@@ -775,28 +811,40 @@ class _LignePatient extends StatelessWidget {
   }
 }
 
-// ── CARTE PATIENT DÉTAIL (onglet Mes patients) ────────────────────────────────
-
 class _CartePatientDetail extends StatelessWidget {
-  final PatientModel patient;
-
+  final Map<String, dynamic> patient;
   const _CartePatientDetail({required this.patient});
 
-  Color get _couleurObservance {
-    if (patient.observance >= 0.9) return AppColors.success;
-    if (patient.observance >= 0.7) return AppColors.warning;
+  Color get _couleur {
+    final obs = patient['observance'] as double? ?? 0;
+    if (obs >= 90) return AppColors.success;
+    if (obs >= 70) return AppColors.warning;
     return AppColors.danger;
+  }
+
+  String get _statut {
+    final obs = patient['observance'] as double? ?? 0;
+    if (obs >= 90) return 'Excellent';
+    if (obs >= 70) return 'Attention';
+    return 'En retard';
   }
 
   @override
   Widget build(BuildContext context) {
+    final obs = patient['observance'] as double? ?? 0;
+    final initiales = (patient['nom'] as String? ?? 'P')
+        .split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase();
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                DossierPatientScreen(patient: patient),
+            builder: (_) => DossierPatientScreen(patient: patient),
           ),
         );
       },
@@ -819,17 +867,15 @@ class _CartePatientDetail extends StatelessWidget {
           children: [
             Row(
               children: [
-                // Avatar
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 52, height: 52,
                   decoration: BoxDecoration(
-                    color: patient.couleurAvatar,
+                    color: _couleur,
                     shape: BoxShape.circle,
                   ),
                   child: Center(
                     child: Text(
-                      patient.initiales,
+                      initiales,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -838,108 +884,80 @@ class _CartePatientDetail extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 14),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        patient.nom,
+                        patient['nom'] as String? ?? '',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 3),
                       Text(
-                        patient.protocole,
+                        '+243 ${patient['numero'] ?? ''}',
                         style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
+                            fontSize: 12,
+                            color: AppColors.textSecondary),
                       ),
                     ],
                   ),
                 ),
-
-                // Badge statut
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
+                      horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: _couleurObservance.withValues(alpha: 0.1),
+                    color: _couleur.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    patient.statut,
+                    _statut,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: _couleurObservance,
+                      color: _couleur,
                     ),
                   ),
                 ),
-
               ],
             ),
-
             const SizedBox(height: 14),
-
-            // Barre observance
             Row(
               children: [
-                const Text(
-                  'Observance',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+                const Text('Observance',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
                 const Spacer(),
-                Text(
-                  '${(patient.observance * 100).toInt()}%',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: _couleurObservance,
-                  ),
-                ),
+                Text('${obs.toInt()}%',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _couleur,
+                    )),
               ],
             ),
             const SizedBox(height: 6),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: patient.observance,
+                value: obs / 100,
                 backgroundColor: const Color(0xFFE0E7EF),
-                valueColor: AlwaysStoppedAnimation(_couleurObservance),
+                valueColor: AlwaysStoppedAnimation(_couleur),
                 minHeight: 8,
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Dernière prise
             Row(
               children: [
-                const Icon(
-                  Icons.access_time,
-                  size: 14,
-                  color: AppColors.textSecondary,
-                ),
+                const Icon(Icons.phone_outlined,
+                    size: 14, color: AppColors.textSecondary),
                 const SizedBox(width: 6),
-                Text(
-                  'Dernière prise : ${patient.dernierePrise}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+                Text('+243 ${patient['numero'] ?? ''}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
                 const Spacer(),
                 const Text(
                   'Voir le dossier →',
@@ -951,7 +969,6 @@ class _CartePatientDetail extends StatelessWidget {
                 ),
               ],
             ),
-
           ],
         ),
       ),
@@ -959,36 +976,60 @@ class _CartePatientDetail extends StatelessWidget {
   }
 }
 
-// ── DOSSIER PATIENT ──────────────────────────────────────────────────────────
-
-class DossierPatientScreen extends StatelessWidget {
-  final PatientModel patient;
-
+// ─────────────────────────────────────────────────────────────────────────────
+//  DOSSIER PATIENT
+// ─────────────────────────────────────────────────────────────────────────────
+class DossierPatientScreen extends StatefulWidget {
+  final Map<String, dynamic> patient;
   const DossierPatientScreen({super.key, required this.patient});
 
-  Color get _couleurObservance {
-    if (patient.observance >= 0.9) return AppColors.success;
-    if (patient.observance >= 0.7) return AppColors.warning;
+  @override
+  State<DossierPatientScreen> createState() => _DossierPatientScreenState();
+}
+
+class _DossierPatientScreenState extends State<DossierPatientScreen> {
+  List<Map<String, dynamic>> _historique = [];
+  List<Map<String, dynamic>> _traitements = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  Future<void> _charger() async {
+    final id = widget.patient['id'] as int;
+    final hist = await DatabaseService().getHistorique30j(id);
+    final trait = await DatabaseService().getTraitements(id);
+    setState(() {
+      _historique = hist;
+      _traitements = trait;
+    });
+  }
+
+  Color get _couleur {
+    final obs = widget.patient['observance'] as double? ?? 0;
+    if (obs >= 90) return AppColors.success;
+    if (obs >= 70) return AppColors.warning;
     return AppColors.danger;
   }
 
-  // Historique simulé
-  final List<bool> _historique = const [
-    true, true, true, false, true, true, true,
-    true, true, false, true, true, true, true,
-    true, true, true, true, true, false, true,
-    true, true, true, true, true, true, true,
-    true, false,
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final patient = widget.patient;
+    final obs = patient['observance'] as double? ?? 0;
+    final initiales = (patient['nom'] as String? ?? 'P')
+        .split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: CustomScrollView(
         slivers: [
 
-          // En-tête
           SliverToBoxAdapter(
             child: Container(
               decoration: const BoxDecoration(
@@ -1007,8 +1048,6 @@ class DossierPatientScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-
-                      // Retour
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
                         child: Container(
@@ -1017,22 +1056,17 @@ class DossierPatientScreen extends StatelessWidget {
                             color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(
-                            Icons.arrow_back_ios_new,
-                            color: Colors.white, size: 16,
-                          ),
+                          child: const Icon(Icons.arrow_back_ios_new,
+                              color: Colors.white, size: 16),
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Avatar + nom
                       Row(
                         children: [
                           Container(
                             width: 60, height: 60,
                             decoration: BoxDecoration(
-                              color: patient.couleurAvatar,
+                              color: _couleur,
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.4),
@@ -1041,7 +1075,7 @@ class DossierPatientScreen extends StatelessWidget {
                             ),
                             child: Center(
                               child: Text(
-                                patient.initiales,
+                                initiales,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 20,
@@ -1056,16 +1090,15 @@ class DossierPatientScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  patient.nom,
+                                  patient['nom'] as String? ?? '',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
                                 Text(
-                                  'ID : CS-2026-00${patient.id}',
+                                  '+243 ${patient['numero'] ?? ''}',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.7),
                                     fontSize: 13,
@@ -1074,30 +1107,27 @@ class DossierPatientScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          // Badge statut
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6,
-                            ),
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: _couleurObservance.withValues(alpha: 0.2),
+                              color: _couleur.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: _couleurObservance.withValues(alpha: 0.5),
+                                color: _couleur.withValues(alpha: 0.5),
                               ),
                             ),
                             child: Text(
-                              patient.statut,
+                              '${obs.toInt()}%',
                               style: TextStyle(
-                                color: _couleurObservance,
-                                fontSize: 12,
+                                color: _couleur,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
                         ],
                       ),
-
                     ],
                   ),
                 ),
@@ -1114,24 +1144,21 @@ class DossierPatientScreen extends StatelessWidget {
                 Row(
                   children: [
                     _StatDossier(
-                      valeur: '${(patient.observance * 100).toInt()}%',
+                      valeur: '${obs.toInt()}%',
                       label: 'Observance',
-                      couleur: _couleurObservance,
-                      fond: _couleurObservance.withValues(alpha: 0.1),
+                      couleur: _couleur,
                     ),
                     const SizedBox(width: 12),
                     _StatDossier(
-                      valeur: '26',
+                      valeur: '${_historique.where((p) => p['statut'] == 'pris').length}',
                       label: 'Prises confirmées',
                       couleur: AppColors.success,
-                      fond: const Color(0xFFE8F5E9),
                     ),
                     const SizedBox(width: 12),
                     _StatDossier(
-                      valeur: '4',
+                      valeur: '${_historique.where((p) => p['statut'] != 'pris').length}',
                       label: 'Manquées',
                       couleur: AppColors.danger,
-                      fond: const Color(0xFFFFEBEE),
                     ),
                   ],
                 ),
@@ -1147,7 +1174,6 @@ class DossierPatientScreen extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-
                 const SizedBox(height: 12),
 
                 Container(
@@ -1158,17 +1184,27 @@ class DossierPatientScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      _ligneInfo('Protocole', patient.protocole),
-                      _ligneInfo('Dosage/jour', '3 comprimés'),
-                      _ligneInfo('Début traitement', '06/03/2026'),
-                      _ligneInfo('Prochain RDV', '20/04/2026', dernier: true),
+                      _LigneInfo(
+                        'Protocole',
+                        _traitements.isNotEmpty
+                            ? (_traitements.first['nom_medicament']
+                        as String? ??
+                            '—')
+                            : '—',
+                        false,
+                      ),
+                      _LigneInfo('Hôpital',
+                          patient['hopital'] as String? ?? 'CHCC', false),
+                      _LigneInfo('Soignant',
+                          patient['soignant'] as String? ?? 'Dr. Ndetereyuwe',
+                          true),
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 20),
 
-                // Historique
+                // Historique grille
                 const Text(
                   'Historique 30 jours',
                   style: TextStyle(
@@ -1177,7 +1213,6 @@ class DossierPatientScreen extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-
                 const SizedBox(height: 12),
 
                 Container(
@@ -1187,48 +1222,37 @@ class DossierPatientScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFFE0E7EF)),
                   ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: ['L','M','M','J','V','S','D']
-                            .map((j) => Expanded(
-                          child: Center(
-                            child: Text(
-                              j,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 7,
-                          crossAxisSpacing: 4,
-                          mainAxisSpacing: 4,
+                  child: _historique.isEmpty
+                      ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Aucune prise enregistrée',
+                          style: TextStyle(
+                              color: AppColors.textSecondary)),
+                    ),
+                  )
+                      : GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      crossAxisSpacing: 4,
+                      mainAxisSpacing: 4,
+                    ),
+                    itemCount: _historique.length.clamp(0, 30),
+                    itemBuilder: (_, i) {
+                      final pris =
+                          _historique[i]['statut'] == 'pris';
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: pris
+                              ? const Color(0xFF0288D1)
+                              : const Color(0xFFFFCDD2),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        itemCount: _historique.length,
-                        itemBuilder: (context, i) {
-                          final pris = _historique[i];
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: pris
-                                  ? const Color(0xFF0288D1)
-                                  : const Color(0xFFFFCDD2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
 
@@ -1240,12 +1264,13 @@ class DossierPatientScreen extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Message envoyé au patient'),
-                              behavior: SnackBarBehavior.floating,
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => MessagerieScreen(
+                              destinataireId: patient['id'].toString(),
+                              destinataireNom: patient['nom'] as String,
+                              role: 'soignant',
                             ),
-                          );
+                          ));
                         },
                         icon: const Icon(Icons.message_outlined, size: 18),
                         label: const Text('Message'),
@@ -1255,8 +1280,7 @@ class DossierPatientScreen extends StatelessWidget {
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
@@ -1266,7 +1290,7 @@ class DossierPatientScreen extends StatelessWidget {
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Modification du protocole'),
+                              content: Text('Modifier le protocole'),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
@@ -1276,13 +1300,10 @@ class DossierPatientScreen extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF0288D1),
                           side: const BorderSide(
-                            color: Color(0xFF0288D1),
-                            width: 1.5,
-                          ),
+                              color: Color(0xFF0288D1), width: 1.5),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
@@ -1300,99 +1321,68 @@ class DossierPatientScreen extends StatelessWidget {
     );
   }
 
-  Widget _ligneInfo(
-      String label,
-      String valeur, {
-        bool dernier = false,
-      }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16, vertical: 14,
-      ),
-      decoration: BoxDecoration(
-        border: dernier
-            ? null
-            : const Border(
-          bottom: BorderSide(
-            color: Color(0xFFF0F4F8),
-            width: 1,
-          ),
+  Widget _LigneInfo(String label, String valeur, bool dernier) =>
+      Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: dernier
+              ? null
+              : const Border(
+              bottom: BorderSide(
+                  color: Color(0xFFF0F4F8), width: 1)),
         ),
-      ),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            valeur,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        child: Row(
+          children: [
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary)),
+            const Spacer(),
+            Text(valeur,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                )),
+          ],
+        ),
+      );
 }
 
-// ── STAT DOSSIER ─────────────────────────────────────────────────────────────
-
 class _StatDossier extends StatelessWidget {
-  final String valeur;
-  final String label;
+  final String valeur, label;
   final Color couleur;
-  final Color fond;
-
-  const _StatDossier({
-    required this.valeur,
-    required this.label,
-    required this.couleur,
-    required this.fond,
-  });
+  const _StatDossier(
+      {required this.valeur, required this.label, required this.couleur});
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          vertical: 14, horizontal: 10,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE0E7EF)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              valeur,
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(
+          vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE0E7EF)),
+      ),
+      child: Column(
+        children: [
+          Text(valeur,
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: couleur,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
+              )),
+          const SizedBox(height: 4),
+          Text(label,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 10,
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+              )),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }

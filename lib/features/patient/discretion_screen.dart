@@ -1,18 +1,22 @@
+
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
+import '../../core/services/icon_service.dart';
 
-// Les apparences disponibles pour le mode camouflage
 class _Apparence {
   final String id;
   final IconData icone;
   final String nom;
   final String description;
+  final Color couleur;
 
   const _Apparence({
     required this.id,
     required this.icone,
     required this.nom,
     required this.description,
+    required this.couleur,
   });
 }
 
@@ -28,8 +32,8 @@ class _DiscretionScreenState extends State<DiscretionScreen>
 
   bool _camouflageActif = false;
   String _apparenceChoisie = 'calculatrice';
+  bool _enChargement = false;
 
-  // Animation pour la transition quand on active le camouflage
   late AnimationController _animController;
   late Animation<double> _animation;
 
@@ -38,25 +42,29 @@ class _DiscretionScreenState extends State<DiscretionScreen>
       id: 'calculatrice',
       icone: Icons.calculate_outlined,
       nom: 'Calculatrice',
-      description: 'L\'app ressemble à une calculatrice standard',
+      description: 'L\'app ressemble à une calculatrice',
+      couleur: Color(0xFF1565C0),
     ),
     _Apparence(
       id: 'meteo',
       icone: Icons.wb_sunny_outlined,
       nom: 'Météo',
       description: 'L\'app ressemble à une app météo',
+      couleur: Color(0xFFF57F17),
     ),
     _Apparence(
       id: 'notes',
       icone: Icons.note_outlined,
       nom: 'Notes',
       description: 'L\'app ressemble à un bloc-notes',
+      couleur: Color(0xFF6A1B9A),
     ),
     _Apparence(
       id: 'minuteur',
       icone: Icons.timer_outlined,
       nom: 'Minuteur',
       description: 'L\'app ressemble à un minuteur',
+      couleur: Color(0xFF00897B),
     ),
   ];
 
@@ -71,6 +79,7 @@ class _DiscretionScreenState extends State<DiscretionScreen>
       parent: _animController,
       curve: Curves.easeInOut,
     );
+    _chargerEtat();
   }
 
   @override
@@ -79,49 +88,151 @@ class _DiscretionScreenState extends State<DiscretionScreen>
     super.dispose();
   }
 
-  // Active ou désactive le mode camouflage
-  void _toggleCamouflage(bool valeur) {
-    setState(() => _camouflageActif = valeur);
-    if (valeur) {
-      _animController.forward();
-      // Simule l'activation du mode camouflage
-      Future.delayed(const Duration(milliseconds: 600), () {
-        if (!mounted) return;
-        _afficherConfirmation();
+  Future<void> _chargerEtat() async {
+    final actif = await IconService().isCamouflageActif();
+    final apparence = await IconService().getApparenceActive();
+    if (mounted) {
+      setState(() {
+        _camouflageActif = actif;
+        _apparenceChoisie = apparence == 'normal' ? 'calculatrice' : apparence;
       });
-    } else {
-      _animController.reverse();
+      if (actif) _animController.forward();
     }
   }
 
-  // Message de confirmation quand le camouflage s'active
-  void _afficherConfirmation() {
+  Future<void> _toggleCamouflage(bool valeur) async {
+    setState(() {
+      _camouflageActif = valeur;
+      _enChargement = true;
+    });
+
+    if (valeur) {
+      _animController.forward();
+
+      // Change l'icône externe
+      final succes = await IconService().changerIcone(_apparenceChoisie);
+
+      setState(() => _enChargement = false);
+
+      if (mounted) _afficherConfirmation(succes);
+    } else {
+      _animController.reverse();
+
+      // Revient à l'icône normale
+      await IconService().desactiverCamouflage();
+      setState(() => _enChargement = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Mode discrétion désactivé — icône normale restaurée'),
+            backgroundColor: AppColors.textSecondary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _changerApparenceActive(String nouvelleApparence) async {
+    setState(() => _apparenceChoisie = nouvelleApparence);
+
+    // Si le camouflage est actif, change l'icône immédiatement
+    if (_camouflageActif) {
+      setState(() => _enChargement = true);
+      await IconService().changerIcone(nouvelleApparence);
+      setState(() => _enChargement = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Icône changée → ${_apparences.firstWhere((a) => a.id == nouvelleApparence).nom}'),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  void _afficherConfirmation(bool iconeChangee) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
             Icon(Icons.shield, color: AppColors.primary, size: 24),
             SizedBox(width: 10),
-            Text(
-              'Mode activé',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text('Mode activé',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           ],
         ),
-        content: const Text(
-          'Le mode discrétion est actif. L\'application '
-              'se masquera automatiquement quand quelqu\'un '
-              'prendra votre téléphone.\n\n'
-              'Votre code PIN sera requis pour y revenir.',
-          style: TextStyle(fontSize: 14, height: 1.5),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Le mode discrétion est actif.',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            if (iconeChangee)
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.check_circle_outline,
+                        color: AppColors.success, size: 16),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Icône externe changée dans le launcher.',
+                        style: TextStyle(fontSize: 12, color: AppColors.success),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_outlined,
+                        color: AppColors.warning, size: 16),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Façade activée à l\'intérieur. Le changement d\'icône launcher peut nécessiter un redémarrage.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFFE65100)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 10),
+            const Text(
+              'Votre code PIN sera requis pour retrouver l\'interface réelle.',
+              style: TextStyle(fontSize: 13, height: 1.5),
+            ),
+          ],
         ),
         actions: [
           ElevatedButton(
@@ -130,8 +241,7 @@ class _DiscretionScreenState extends State<DiscretionScreen>
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+                  borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Compris'),
           ),
@@ -142,17 +252,19 @@ class _DiscretionScreenState extends State<DiscretionScreen>
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTranslations.t;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: Column(
         children: [
 
-          // En-tête — change de couleur selon l'état
+          // En-tête animé
           AnimatedContainer(
             duration: const Duration(milliseconds: 400),
             decoration: BoxDecoration(
               color: _camouflageActif
-                  ? const Color(0xFF263238)  // gris foncé si actif
+                  ? const Color(0xFF263238)
                   : AppColors.primary,
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(24),
@@ -163,92 +275,79 @@ class _DiscretionScreenState extends State<DiscretionScreen>
               bottom: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-
-                    // Icône et titre
-                    Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(
-                            _camouflageActif
-                                ? Icons.shield
-                                : Icons.shield_outlined,
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Mode discrétion',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                _camouflageActif
-                                    ? 'Protection active'
-                                    : 'Protection désactivée',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Badge statut
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _camouflageActif
-                                ? AppColors.success.withValues(alpha: 0.2)
-                                : Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: _camouflageActif
-                                  ? AppColors.success.withValues(alpha: 0.5)
-                                  : Colors.white.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Text(
-                            _camouflageActif ? 'ON' : 'OFF',
-                            style: TextStyle(
-                              color: _camouflageActif
-                                  ? AppColors.success
-                                  : Colors.white.withValues(alpha: 0.7),
-                              fontSize: 12,
+                    Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        _camouflageActif
+                            ? Icons.shield
+                            : Icons.shield_outlined,
+                        color: Colors.white, size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            t('discretion'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                        ),
-                      ],
+                          Text(
+                            _camouflageActif
+                                ? 'Protection active'
+                                : 'Protection désactivée',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-
+                    // Badge ON/OFF
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _camouflageActif
+                            ? AppColors.success.withValues(alpha: 0.2)
+                            : Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _camouflageActif
+                              ? AppColors.success.withValues(alpha: 0.5)
+                              : Colors.white.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        _camouflageActif ? 'ON' : 'OFF',
+                        style: TextStyle(
+                          color: _camouflageActif
+                              ? AppColors.success
+                              : Colors.white.withValues(alpha: 0.7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
           ),
 
-          // Contenu
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(20),
@@ -276,8 +375,7 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                   child: Row(
                     children: [
                       Container(
-                        width: 44,
-                        height: 44,
+                        width: 44, height: 44,
                         decoration: BoxDecoration(
                           color: _camouflageActif
                               ? const Color(0xFF263238).withValues(alpha: 0.1)
@@ -293,11 +391,11 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                         ),
                       ),
                       const SizedBox(width: 14),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'Activer le camouflage',
                               style: TextStyle(
                                 fontSize: 15,
@@ -305,10 +403,11 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                                 color: AppColors.textPrimary,
                               ),
                             ),
-                            SizedBox(height: 3),
                             Text(
-                              'Masque l\'app en public',
-                              style: TextStyle(
+                              _enChargement
+                                  ? 'Changement en cours...'
+                                  : 'Change l\'icône dans le launcher',
+                              style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textSecondary,
                               ),
@@ -316,7 +415,15 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                           ],
                         ),
                       ),
-                      Switch(
+                      _enChargement
+                          ? const SizedBox(
+                        width: 24, height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: AppColors.primary,
+                        ),
+                      )
+                          : Switch(
                         value: _camouflageActif,
                         onChanged: _toggleCamouflage,
                         activeColor: AppColors.primary,
@@ -337,19 +444,15 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                     color: AppColors.textPrimary,
                   ),
                 ),
-
                 const SizedBox(height: 6),
-
                 const Text(
-                  'L\'app prendra cette apparence quand '
-                      'quelqu\'un prend votre téléphone.',
+                  'L\'icône du launcher et l\'interface changeront selon ce choix.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
                     height: 1.4,
                   ),
                 ),
-
                 const SizedBox(height: 14),
 
                 // Grille des apparences
@@ -361,28 +464,26 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 1.4,
+                    childAspectRatio: 1.3,
                   ),
                   itemCount: _apparences.length,
-                  itemBuilder: (context, index) {
-                    final app = _apparences[index];
+                  itemBuilder: (_, i) {
+                    final app = _apparences[i];
                     final estChoisie = _apparenceChoisie == app.id;
 
                     return GestureDetector(
-                      onTap: () {
-                        setState(() => _apparenceChoisie = app.id);
-                      },
+                      onTap: () => _changerApparenceActive(app.id),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: estChoisie
-                              ? AppColors.primaryPale
+                              ? app.couleur.withValues(alpha: 0.08)
                               : Colors.white,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: estChoisie
-                                ? AppColors.primary
+                                ? app.couleur
                                 : const Color(0xFFE0E7EF),
                             width: estChoisie ? 1.5 : 1,
                           ),
@@ -402,23 +503,21 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                                 Icon(
                                   app.icone,
                                   color: estChoisie
-                                      ? AppColors.primary
+                                      ? app.couleur
                                       : AppColors.textSecondary,
                                   size: 24,
                                 ),
                                 const Spacer(),
                                 if (estChoisie)
                                   Container(
-                                    width: 18,
-                                    height: 18,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.primary,
+                                    width: 18, height: 18,
+                                    decoration: BoxDecoration(
+                                      color: app.couleur,
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(
                                       Icons.check,
-                                      color: Colors.white,
-                                      size: 11,
+                                      color: Colors.white, size: 11,
                                     ),
                                   ),
                               ],
@@ -430,7 +529,7 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: estChoisie
-                                    ? AppColors.primary
+                                    ? app.couleur
                                     : AppColors.textPrimary,
                               ),
                             ),
@@ -450,23 +549,18 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                     color: const Color(0xFFFFF8E1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AppColors.warning.withValues(alpha: 0.4),
-                    ),
+                        color: AppColors.warning.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.warning_amber_outlined,
-                        color: AppColors.warning,
-                        size: 18,
-                      ),
+                      Icon(Icons.warning_amber_outlined,
+                          color: AppColors.warning, size: 18),
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Text(
-                          'Votre code PIN sera requis pour '
-                              'revenir à ConfidantSanté depuis '
-                              'le mode camouflage.',
+                          'Le changement d\'icône peut prendre quelques secondes sur Android. '
+                              'Votre code PIN sera requis pour accéder à ConfidantSanté depuis le mode camouflage.',
                           style: TextStyle(
                             fontSize: 12,
                             color: Color(0xFFE65100),
@@ -480,49 +574,60 @@ class _DiscretionScreenState extends State<DiscretionScreen>
 
                 const SizedBox(height: 20),
 
-                // Infos sur la protection
+                // Info icônes requises
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: const Color(0xFFE0E7EF),
-                    ),
+                    color: AppColors.primaryPale,
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              color: AppColors.primary, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'Icônes requises dans le projet',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       const Text(
-                        'Comment ça fonctionne',
+                        'Pour que le changement d\'icône fonctionne, ajoute ces fichiers dans android/app/src/main/res/mipmap-xxxhdpi/ :',
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                            fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 6),
+                      ...['ic_launcher_calculatrice.png',
+                        'ic_launcher_meteo.png',
+                        'ic_launcher_notes.png',
+                        'ic_launcher_minuteur.png']
+                          .map((f) => Padding(
+                        padding:
+                        const EdgeInsets.only(top: 3),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.image_outlined,
+                                size: 12,
+                                color: AppColors.primary),
+                            const SizedBox(width: 6),
+                            Text(f,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  color: AppColors.textPrimary,
+                                )),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      _etapeInfo(
-                        numero: '1',
-                        texte: 'Activez le mode discrétion '
-                            'depuis cet écran.',
-                      ),
-                      _etapeInfo(
-                        numero: '2',
-                        texte: 'Choisissez l\'apparence '
-                            'qui remplacera l\'app.',
-                      ),
-                      _etapeInfo(
-                        numero: '3',
-                        texte: 'L\'app se masque '
-                            'automatiquement en public.',
-                      ),
-                      _etapeInfo(
-                        numero: '4',
-                        texte: 'Utilisez votre PIN pour '
-                            'retrouver l\'interface réelle.',
-                        dernier: true,
-                      ),
+                      )),
                     ],
                   ),
                 ),
@@ -535,60 +640,6 @@ class _DiscretionScreenState extends State<DiscretionScreen>
 
         ],
       ),
-    );
-  }
-
-  Widget _etapeInfo({
-    required String numero,
-    required String texte,
-    bool dernier = false,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: const BoxDecoration(
-                color: AppColors.primaryPale,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  numero,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ),
-            if (!dernier)
-              Container(
-                width: 1,
-                height: 28,
-                color: const Color(0xFFE0E7EF),
-              ),
-          ],
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 16),
-            child: Text(
-              texte,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
