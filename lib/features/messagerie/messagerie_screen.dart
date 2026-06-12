@@ -1,15 +1,16 @@
+// lib/features/messagerie/messagerie_screen.dart
+// ConfidantSanté — Messagerie locale SQLite (offline-first)
+// Remplace la version Firestore — fonctionne sans internet
+
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
 
 class MessagerieScreen extends StatefulWidget {
-  /// [destinataireId] : ID du soignant (si appelé par patient) ou ID du patient
-  /// [destinataireNom] : Nom affiché dans l'en-tête
-  /// [role] : 'patient' ou 'soignant'
   final String destinataireId;
   final String destinataireNom;
-  final String role;
+  final String role; // 'patient' ou 'soignant'
 
   const MessagerieScreen({
     super.key,
@@ -24,11 +25,13 @@ class MessagerieScreen extends StatefulWidget {
 
 class _MessagerieScreenState extends State<MessagerieScreen> {
 
-  final TextEditingController _msgCtrl = TextEditingController();
-  final ScrollController _scrollCtrl = ScrollController();
+  final TextEditingController _msgCtrl  = TextEditingController();
+  final ScrollController      _scrollCtrl = ScrollController();
+
   String? _monId;
   String? _conversationId;
   bool _isLoading = true;
+  List<Map<String, dynamic>> _messages = [];
 
   @override
   void initState() {
@@ -43,69 +46,53 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
     super.dispose();
   }
 
+  // ── Initialisation ────────────────────────────────────────────────────────
   Future<void> _initialiser() async {
-    // Récupère l'ID de l'utilisateur connecté
     if (widget.role == 'patient') {
       _monId = await SessionService().getPatientId();
     } else {
       _monId = await SessionService().getSoignantId();
     }
-
     if (_monId == null) return;
 
-    // L'ID de conversation est toujours : patientId_soignantId (trié)
-    final ids = [
-      widget.role == 'patient' ? _monId! : widget.destinataireId,
-      widget.role == 'soignant' ? _monId! : widget.destinataireId,
-    ];
-    _conversationId = '${ids[0]}_${ids[1]}';
+    // ID de conversation : patientId_soignantId (toujours trié de la même façon)
+    final patientId  = widget.role == 'patient' ? _monId! : widget.destinataireId;
+    final soignantId = widget.role == 'soignant' ? _monId! : widget.destinataireId;
+    _conversationId  = '${patientId}_$soignantId';
 
-    // Crée la conversation dans Firestore si elle n'existe pas
-    await FirebaseFirestore.instance
-        .collection('conversations')
-        .doc(_conversationId)
-        .set({
-      'patient_id':  ids[0],
-      'soignant_id': ids[1],
-      'created_at':  FieldValue.serverTimestamp(),
-      'last_message': '',
-      'last_message_at': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
+    await _chargerMessages();
     if (mounted) setState(() => _isLoading = false);
   }
 
+  // ── Charge les messages depuis SQLite ─────────────────────────────────────
+  Future<void> _chargerMessages() async {
+    if (_conversationId == null) return;
+    final msgs = await DatabaseService().getMessages(_conversationId!);
+    if (mounted) {
+      setState(() => _messages = msgs);
+      _scrollerBas();
+    }
+  }
+
+  // ── Envoi d'un message ────────────────────────────────────────────────────
   Future<void> _envoyerMessage() async {
     final texte = _msgCtrl.text.trim();
     if (texte.isEmpty || _conversationId == null || _monId == null) return;
 
     _msgCtrl.clear();
 
-    final messageData = {
-      'texte':       texte,
-      'expediteur_id':  _monId,
-      'expediteur_role': widget.role,
-      'timestamp':   FieldValue.serverTimestamp(),
-      'lu':          false,
-    };
+    await DatabaseService().envoyerMessage(
+      conversationId:   _conversationId!,
+      expediteurId:     _monId!,
+      expediteurRole:   widget.role,
+      destinataireId:   widget.destinataireId,
+      texte:            texte,
+    );
 
-    // Ajoute le message dans la sous-collection
-    await FirebaseFirestore.instance
-        .collection('conversations')
-        .doc(_conversationId)
-        .collection('messages')
-        .add(messageData);
+    await _chargerMessages();
+  }
 
-    // Met à jour le dernier message de la conversation
-    await FirebaseFirestore.instance
-        .collection('conversations')
-        .doc(_conversationId)
-        .update({
-      'last_message':    texte,
-      'last_message_at': FieldValue.serverTimestamp(),
-    });
-
-    // Scroll vers le bas
+  void _scrollerBas() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
@@ -117,8 +104,13 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
     });
   }
 
+  // ── UI ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final couleurHeader = widget.role == 'soignant'
+        ? const Color(0xFF0288D1)
+        : AppColors.primary;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: Column(
@@ -127,11 +119,9 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
           // En-tête
           Container(
             decoration: BoxDecoration(
-              color: widget.role == 'soignant'
-                  ? const Color(0xFF0288D1)
-                  : AppColors.primary,
+              color: couleurHeader,
               borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(24),
+                bottomLeft:  Radius.circular(24),
                 bottomRight: Radius.circular(24),
               ),
             ),
@@ -178,7 +168,6 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
                         ),
                       ),
                     ),
-
                     const SizedBox(width: 12),
 
                     Expanded(
@@ -206,12 +195,29 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
                       ),
                     ),
 
-                    // Indicateur en ligne
+                    // Badge offline
                     Container(
-                      width: 10, height: 10,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.storage_outlined,
+                              color: Colors.white, size: 11),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Local',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -220,106 +226,56 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
             ),
           ),
 
-          // Messages
+          // Zone messages
           Expanded(
             child: _isLoading
                 ? const Center(
                 child: CircularProgressIndicator(color: AppColors.primary))
-                : _conversationId == null
-                ? const Center(
-                child: Text('Erreur de connexion',
-                    style: TextStyle(color: AppColors.textSecondary)))
-                : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('conversations')
-                  .doc(_conversationId)
-                  .collection('messages')
-                  .orderBy('timestamp', descending: false)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState ==
-                    ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.primary),
-                  );
-                }
-
-                if (!snapshot.hasData ||
-                    snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.chat_bubble_outline_rounded,
-                            size: 64,
-                            color: AppColors.primary
-                                .withValues(alpha: 0.3)),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Aucun message pour l\'instant.\nCommencez la conversation.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: AppColors.textSecondary,
-                            height: 1.6,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                final messages = snapshot.data!.docs;
-
-                // Scroll automatique vers le bas
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_scrollCtrl.hasClients) {
-                    _scrollCtrl.jumpTo(
-                        _scrollCtrl.position.maxScrollExtent);
+                : _messages.isEmpty
+                ? _vide()
+                : RefreshIndicator(
+              onRefresh: _chargerMessages,
+              color: AppColors.primary,
+              child: ListView.builder(
+                controller: _scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                itemCount: _messages.length,
+                itemBuilder: (_, i) {
+                  final msg  = _messages[i];
+                  final estMoi = msg['expediteur_id'].toString() == _monId;
+                  final ts   = msg['timestamp'] as String? ?? '';
+                  String heure = '';
+                  if (ts.isNotEmpty) {
+                    try {
+                      final dt = DateTime.parse(ts);
+                      heure =
+                      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                    } catch (_) {}
                   }
-                });
-
-                return ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  itemCount: messages.length,
-                  itemBuilder: (_, i) {
-                    final msg = messages[i].data()
-                    as Map<String, dynamic>;
-                    final estMoi =
-                        msg['expediteur_id'] == _monId;
-                    final timestamp =
-                    msg['timestamp'] as Timestamp?;
-                    final heure = timestamp != null
-                        ? '${timestamp.toDate().hour.toString().padLeft(2, '0')}:${timestamp.toDate().minute.toString().padLeft(2, '0')}'
-                        : '';
-
-                    return _BullMessage(
-                      texte: msg['texte'] as String? ?? '',
-                      heure: heure,
-                      estMoi: estMoi,
-                      role: msg['expediteur_role'] as String? ?? '',
-                    );
-                  },
-                );
-              },
+                  return _BulleMessage(
+                    texte:   msg['texte'] as String? ?? '',
+                    heure:   heure,
+                    estMoi:  estMoi,
+                    role:    msg['expediteur_role'] as String? ?? '',
+                  );
+                },
+              ),
             ),
           ),
 
-          // Zone de saisie
+          // Zone saisie
           Container(
             padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 12,
+              left:   16,
+              right:  16,
+              top:    12,
               bottom: MediaQuery.of(context).viewInsets.bottom + 12,
             ),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
+                  color:  Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, -3),
                 ),
@@ -336,8 +292,8 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
                     ),
                     child: TextField(
                       controller: _msgCtrl,
-                      maxLines: 3,
-                      minLines: 1,
+                      maxLines:   3,
+                      minLines:   1,
                       textCapitalization: TextCapitalization.sentences,
                       style: const TextStyle(
                           fontSize: 14, color: AppColors.textPrimary),
@@ -349,6 +305,7 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
                         contentPadding: EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                       ),
+                      onSubmitted: (_) => _envoyerMessage(),
                     ),
                   ),
                 ),
@@ -358,10 +315,8 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
                   child: Container(
                     width: 46, height: 46,
                     decoration: BoxDecoration(
-                      color: widget.role == 'soignant'
-                          ? const Color(0xFF0288D1)
-                          : AppColors.primary,
-                      shape: BoxShape.circle,
+                      color:  couleurHeader,
+                      shape:  BoxShape.circle,
                     ),
                     child: const Icon(Icons.send_rounded,
                         color: Colors.white, size: 20),
@@ -375,16 +330,35 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
       ),
     );
   }
+
+  Widget _vide() => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.chat_bubble_outline_rounded,
+            size: 64,
+            color: AppColors.primary.withValues(alpha: 0.3)),
+        const SizedBox(height: 16),
+        const Text(
+          'Aucun message pour l\'instant.\nCommencez la conversation.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 15,
+            color: AppColors.textSecondary,
+            height: 1.6,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Bulle de message
-// ─────────────────────────────────────────────────────────────────────────────
-class _BullMessage extends StatelessWidget {
+// ── Bulle de message ─────────────────────────────────────────────────────────
+class _BulleMessage extends StatelessWidget {
   final String texte, heure, role;
   final bool estMoi;
 
-  const _BullMessage({
+  const _BulleMessage({
     required this.texte,
     required this.heure,
     required this.estMoi,
@@ -402,7 +376,6 @@ class _BullMessage extends StatelessWidget {
         children: [
 
           if (!estMoi) ...[
-            // Avatar expéditeur
             Container(
               width: 28, height: 28,
               decoration: BoxDecoration(
@@ -421,19 +394,16 @@ class _BullMessage extends StatelessWidget {
             const SizedBox(width: 8),
           ],
 
-          // Bulle
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: estMoi
-                    ? AppColors.primary
-                    : Colors.white,
+                color: estMoi ? AppColors.primary : Colors.white,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: estMoi
+                  topLeft:     const Radius.circular(18),
+                  topRight:    const Radius.circular(18),
+                  bottomLeft:  estMoi
                       ? const Radius.circular(18)
                       : const Radius.circular(4),
                   bottomRight: estMoi
@@ -442,9 +412,9 @@ class _BullMessage extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color:      Colors.black.withValues(alpha: 0.06),
                     blurRadius: 6,
-                    offset: const Offset(0, 2),
+                    offset:     const Offset(0, 2),
                   ),
                 ],
               ),
@@ -455,7 +425,9 @@ class _BullMessage extends StatelessWidget {
                     texte,
                     style: TextStyle(
                       fontSize: 14,
-                      color: estMoi ? Colors.white : AppColors.textPrimary,
+                      color: estMoi
+                          ? Colors.white
+                          : AppColors.textPrimary,
                       height: 1.4,
                     ),
                   ),

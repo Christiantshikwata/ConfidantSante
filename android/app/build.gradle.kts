@@ -21,7 +21,6 @@ android {
 
     defaultConfig {
         applicationId = "cd.udbl.fsi.confidantsante"
-        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

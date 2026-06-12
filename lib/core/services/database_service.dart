@@ -23,13 +23,27 @@ class DatabaseService {
     return await openDatabase(
       cheminComplet,
       onCreate: _creerTables,
-      version: 3,
+      version: 4,
         onUpgrade: (db, oldVersion, newVersion) async {
    if (oldVersion < 2) {
       await db.execute('CREATE TABLE IF NOT EXISTS rendez_vous ...');    }
      if (oldVersion < 3) {
       await db.execute('CREATE TABLE IF NOT EXISTS soignants ...');
      await db.execute("INSERT OR IGNORE INTO soignants ...");}
+   if (oldVersion < 4) {
+     await db.execute('''
+      CREATE TABLE IF NOT EXISTS messages (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id  TEXT    NOT NULL,
+        expediteur_id    TEXT    NOT NULL,
+        expediteur_role  TEXT    NOT NULL,
+        destinataire_id  TEXT    NOT NULL,
+        texte            TEXT    NOT NULL,
+        timestamp        TEXT    NOT NULL,
+        lu               INTEGER DEFAULT 0
+      )
+    ''');
+   }
    },
     );
   }
@@ -125,6 +139,18 @@ class DatabaseService {
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+    await db.execute('''
+    CREATE TABLE IF NOT EXISTS messages (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id  TEXT    NOT NULL,
+      expediteur_id    TEXT    NOT NULL,
+      expediteur_role  TEXT    NOT NULL,
+      destinataire_id  TEXT    NOT NULL,
+      texte            TEXT    NOT NULL,
+      timestamp        TEXT    NOT NULL,
+      lu               INTEGER DEFAULT 0
+    )
+  ''');
   }
 
   // ── PATIENTS ──────────────────────────────────────────────────────────────
@@ -438,5 +464,57 @@ class DatabaseService {
       await db.close();
       _db = null;
     }
+  }
+  Future<int> envoyerMessage({
+    required String conversationId,
+    required String expediteurId,
+    required String expediteurRole,
+    required String destinataireId,
+    required String texte,
+  }) async {
+    final db = await database;
+    return await db.insert('messages', {
+      'conversation_id':  conversationId,
+      'expediteur_id':    expediteurId,
+      'expediteur_role':  expediteurRole,
+      'destinataire_id':  destinataireId,
+      'texte':            texte,
+      'timestamp':        DateTime.now().toIso8601String(),
+      'lu':               0,
+    });
+  }
+
+  /// Récupère tous les messages d'une conversation
+  Future<List<Map<String, dynamic>>> getMessages(
+      String conversationId) async {
+    final db = await database;
+    return await db.query(
+      'messages',
+      where:   'conversation_id = ?',
+      whereArgs: [conversationId],
+      orderBy: 'timestamp ASC',
+    );
+  }
+
+  /// Marque les messages comme lus
+  Future<void> marquerLus(String conversationId, String monId) async {
+    final db = await database;
+    await db.update(
+      'messages',
+      {'lu': 1},
+      where:     'conversation_id = ? AND destinataire_id = ? AND lu = 0',
+      whereArgs: [conversationId, monId],
+    );
+  }
+
+  /// Compte les messages non lus pour un destinataire
+  Future<int> getNonLus(String monId) async {
+    final db = await database;
+    final res = await db.query(
+      'messages',
+      where:     'destinataire_id = ? AND lu = 0',
+      whereArgs: [monId],
+    );
+    return res.length;
   }
 }
