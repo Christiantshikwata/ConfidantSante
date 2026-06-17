@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/providers/patient_provider.dart';
-//import '../../core/services/database_service.dart';
-//import '../../core/services/session_service.dart';
-import '../../core/services/notification_service.dart';
 import 'agenda_screen.dart';
 import 'rappels_screen.dart';
 import 'discretion_screen.dart';
@@ -342,12 +339,19 @@ class _PageAccueil extends StatelessWidget {
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      Text(
-                        'Voir tout',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w500,
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const AgendaScreen()),
+                        ),
+                        child: Text(
+                          'Voir l\'agenda',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
@@ -395,45 +399,8 @@ class _PageAccueil extends StatelessWidget {
                     )
                   else
                     ...patient.rappels.map((rappel) =>
-                        _CarteMedicamentSQLite(
-                          rappel: rappel,
-                          patientId: patient.patientId!,
-                        ),
+                        _CarteMedicamentSQLite(rappel: rappel),
                     ),
-                  // BOUTON TEST — à supprimer avant soutenance
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        await NotificationService().afficherNotification(
-                          id: 999,
-                          titre: '💊 Test — ConfidantSanté',
-                          corps:
-                          'Les notifications fonctionnent correctement !',
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.notifications_outlined,
-                        size: 16,
-                        color: AppColors.primary,
-                      ),
-                      label: const Text(
-                        'Tester une notification',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 13,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: AppColors.primary.withValues(alpha: 0.5),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 100),
 
                 ]),
@@ -448,27 +415,17 @@ class _PageAccueil extends StatelessWidget {
 }
 
 // Carte médicament connectée à SQLite
-class _CarteMedicamentSQLite extends StatefulWidget {
+class _CarteMedicamentSQLite extends StatelessWidget {
   final Map<String, dynamic> rappel;
-  final int patientId;
 
-  const _CarteMedicamentSQLite({
-    required this.rappel,
-    required this.patientId,
-  });
-
-  @override
-  State<_CarteMedicamentSQLite> createState() =>
-      _CarteMedicamentSQLiteState();
-}
-
-class _CarteMedicamentSQLiteState
-    extends State<_CarteMedicamentSQLite> {
-
-  bool _pris = false;
+  const _CarteMedicamentSQLite({required this.rappel});
 
   @override
   Widget build(BuildContext context) {
+    final pris = context.select<PatientProvider, bool>(
+      (p) => p.estPrisAujourdhui(rappel['id'] as int? ?? -1),
+    );
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -476,7 +433,7 @@ class _CarteMedicamentSQLiteState
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: _pris
+          color: pris
               ? AppColors.success.withValues(alpha: 0.3)
               : const Color(0xFFE0E7EF),
         ),
@@ -494,14 +451,14 @@ class _CarteMedicamentSQLiteState
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: _pris
+              color: pris
                   ? AppColors.success.withValues(alpha: 0.1)
                   : AppColors.primaryPale,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               Icons.medication_outlined,
-              color: _pris ? AppColors.success : AppColors.primary,
+              color: pris ? AppColors.success : AppColors.primary,
               size: 22,
             ),
           ),
@@ -513,21 +470,21 @@ class _CarteMedicamentSQLiteState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.rappel['nom_medicament'] ?? '',
+                  rappel['nom_medicament'] ?? '',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: _pris
+                    color: pris
                         ? AppColors.textSecondary
                         : AppColors.textPrimary,
-                    decoration: _pris
+                    decoration: pris
                         ? TextDecoration.lineThrough
                         : TextDecoration.none,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${widget.rappel['dosage'] ?? ''} • ${widget.rappel['heure'] ?? ''}',
+                  '${rappel['dosage'] ?? ''} • ${rappel['heure'] ?? ''}',
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -537,28 +494,44 @@ class _CarteMedicamentSQLiteState
             ),
           ),
 
-          // Bouton confirmer prise
+          // Bouton confirmer prise (idempotent : une fois par jour)
           GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AgendaScreen()),
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(14),
+            onTap: pris
+                ? null
+                : () async {
+                    await context
+                        .read<PatientProvider>()
+                        .confirmerPrise(rappel['id'] as int? ?? 0);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('✓ ${rappel['nom_medicament']} pris'),
+                          backgroundColor: AppColors.success,
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          margin: const EdgeInsets.all(16),
+                        ),
+                      );
+                    }
+                  },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 40, height: 40,
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE0E7EF)),
+                shape: BoxShape.circle,
+                color: pris ? AppColors.success : Colors.transparent,
+                border: Border.all(
+                  color: pris ? AppColors.success : const Color(0xFFCFD8DC),
+                  width: 1.5,
+                ),
               ),
-              child: Column(
-                children: [
-                  const Icon(Icons.calendar_today_rounded,
-                      color: AppColors.primary, size: 24),
-                  const SizedBox(height: 6),
-                  const Text('Agenda',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                ],
-              ),
+              child: pris
+                  ? const Icon(Icons.check, color: Colors.white, size: 20)
+                  : const Icon(Icons.medication_outlined,
+                      color: AppColors.primary, size: 20),
             ),
           ),
 

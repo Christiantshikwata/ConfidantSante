@@ -43,8 +43,7 @@ class _RappelsScreenState extends State<RappelsScreen>
     return Consumer<PatientProvider>(
       builder: (context, patient, _) {
 
-        final rappels    = patient.rappels;
-        final totalPris  = rappels.where((r) => false).length;
+        final rappels = patient.rappels;
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFF),
@@ -110,7 +109,7 @@ class _RappelsScreenState extends State<RappelsScreen>
                             ),
                             const SizedBox(width: 8),
                             _StatRapide(
-                              valeur: '${patient.joursActifs}',
+                              valeur: '${patient.prisAujourdhui.length}',
                               label: 'Prises aujourd\'hui',
                               couleur: Colors.white.withValues(alpha: 0.75),
                             ),
@@ -367,23 +366,20 @@ class _OngletAujourdhui extends StatelessWidget {
 
 // ── CARTE RAPPEL ─────────────────────────────────────────────────────────────
 
-class _CarteRappel extends StatefulWidget {
+class _CarteRappel extends StatelessWidget {
   final Map<String, dynamic> rappel;
 
   const _CarteRappel({required this.rappel});
 
   @override
-  State<_CarteRappel> createState() => _CarteRappelState();
-}
-
-class _CarteRappelState extends State<_CarteRappel> {
-
-  bool _pris = false;
-
-  @override
   Widget build(BuildContext context) {
+    // L'état « pris » vient du provider (persistant), pas d'un état local.
+    final pris = context.select<PatientProvider, bool>(
+      (p) => p.estPrisAujourdhui(rappel['id'] as int? ?? -1),
+    );
+
     return Dismissible(
-      key: Key(widget.rappel['id'].toString()),
+      key: Key(rappel['id'].toString()),
       direction: DismissDirection.endToStart,
       background: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -401,14 +397,14 @@ class _CarteRappelState extends State<_CarteRappel> {
       onDismissed: (_) async {
         // Supprime le rappel de SQLite
         await DatabaseService().supprimerRappel(
-          widget.rappel['id'] as int,
+          rappel['id'] as int,
         );
         if (context.mounted) {
           context.read<PatientProvider>().chargerDonnees();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${widget.rappel['nom_medicament']} supprimé',
+                '${rappel['nom_medicament']} supprimé',
               ),
               backgroundColor: AppColors.danger,
               behavior: SnackBarBehavior.floating,
@@ -427,7 +423,7 @@ class _CarteRappelState extends State<_CarteRappel> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _pris
+            color: pris
                 ? AppColors.success.withValues(alpha: 0.3)
                 : const Color(0xFFE0E7EF),
           ),
@@ -445,14 +441,14 @@ class _CarteRappelState extends State<_CarteRappel> {
             Container(
               width: 46, height: 46,
               decoration: BoxDecoration(
-                color: _pris
+                color: pris
                     ? AppColors.success.withValues(alpha: 0.1)
                     : AppColors.primaryPale,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 Icons.medication_outlined,
-                color: _pris ? AppColors.success : AppColors.primary,
+                color: pris ? AppColors.success : AppColors.primary,
                 size: 22,
               ),
             ),
@@ -464,21 +460,21 @@ class _CarteRappelState extends State<_CarteRappel> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.rappel['nom_medicament'] ?? '',
+                    rappel['nom_medicament'] ?? '',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: _pris
+                      color: pris
                           ? AppColors.textSecondary
                           : AppColors.textPrimary,
-                      decoration: _pris
+                      decoration: pris
                           ? TextDecoration.lineThrough
                           : TextDecoration.none,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    widget.rappel['dosage'] ?? '1 comprimé',
+                    rappel['dosage'] ?? '1 comprimé',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
@@ -488,49 +484,45 @@ class _CarteRappelState extends State<_CarteRappel> {
               ),
             ),
 
-            // Bouton confirmer prise
+            // Bouton confirmer prise (idempotent : une fois par jour)
             GestureDetector(
-              onTap: () async {
-                setState(() => _pris = !_pris);
-                if (_pris) {
-                  await DatabaseService().enregistrerPrise(
-                    traitementId: widget.rappel['id'] ?? 0,
-                    patientId:    widget.rappel['patient_id'] ?? 0,
-                    statut: 'pris',
-                  );
-                  if (context.mounted) {
-                    context.read<PatientProvider>().chargerDonnees();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '✓ ${widget.rappel['nom_medicament']} pris',
-                        ),
-                        backgroundColor: AppColors.success,
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        margin: const EdgeInsets.all(16),
-                      ),
-                    );
-                  }
-                }
-              },
+              onTap: pris
+                  ? null
+                  : () async {
+                      await context
+                          .read<PatientProvider>()
+                          .confirmerPrise(rappel['id'] as int? ?? 0);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '✓ ${rappel['nom_medicament']} pris',
+                            ),
+                            backgroundColor: AppColors.success,
+                            duration: const Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            margin: const EdgeInsets.all(16),
+                          ),
+                        );
+                      }
+                    },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: 36, height: 36,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _pris ? AppColors.success : Colors.transparent,
+                  color: pris ? AppColors.success : Colors.transparent,
                   border: Border.all(
-                    color: _pris
+                    color: pris
                         ? AppColors.success
                         : const Color(0xFFCFD8DC),
                     width: 1.5,
                   ),
                 ),
-                child: _pris
+                child: pris
                     ? const Icon(
                   Icons.check,
                   color: Colors.white, size: 18,

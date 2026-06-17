@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'core/constants/app_colors.dart';
 import 'core/services/database_service.dart';
@@ -9,12 +10,23 @@ import 'core/providers/langue_provider.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/auth/role_screen.dart';
 import 'core/services/sync_service.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialise Firebase. Si l'init échoue, l'app continue en mode 100% local.
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('[main] Firebase non initialisé, mode local : $e');
+  }
+
   await DatabaseService().database;
   await NotificationService().initialiser();
-  // Démarre l'écoute de connectivité pour sync automatique
+  // Démarre l'écoute de connectivité pour sync automatique (si Firebase dispo)
   SyncService().ecouterConnectivite();
   // Charge la langue avant de lancer l'app
   final langueProvider = LangueProvider();

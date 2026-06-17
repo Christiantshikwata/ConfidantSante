@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'database_service.dart';
 import 'session_service.dart';
@@ -10,18 +11,26 @@ class SyncService {
   factory SyncService() => _instance;
   SyncService._internal();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Accès paresseux : ne touche Firestore que si Firebase est initialisé.
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+
   bool _syncEnCours = false;
 
-  // ── Vérifie si internet est disponible ───────────────────────────────────
+  /// Vrai si une app Firebase a été initialisée (sinon on reste 100% local).
+  bool get firebaseDisponible => Firebase.apps.isNotEmpty;
+
+  // ── Vérifie si internet est disponible (connectivity_plus 6.x → List) ──────
   Future<bool> _isConnecte() async {
-    final result = await Connectivity().checkConnectivity();
-    return result != ConnectivityResult.none;
+    final results = await Connectivity().checkConnectivity();
+    return results.any((r) => r != ConnectivityResult.none);
   }
 
   // ── Point d'entrée principal ─────────────────────────────────────────────
-  /// Lance la synchronisation si internet est disponible
+  /// Lance la synchronisation si internet et Firebase sont disponibles.
   Future<SyncResult> synchroniser() async {
+    if (!firebaseDisponible) {
+      return SyncResult(succes: false, message: 'Firebase indisponible');
+    }
     if (_syncEnCours) {
       return SyncResult(succes: false, message: 'Synchronisation déjà en cours');
     }
@@ -44,20 +53,16 @@ class SyncService {
         return SyncResult(succes: false, message: 'ID patient invalide');
       }
 
-      // 1. Synchronise le profil patient
-      await _syncProfil(patientId);
+      // Identité stable inter-appareils : le numéro de téléphone.
+      final numero = await SessionService().getNumero();
+      if (numero == null || numero.isEmpty) {
+        return SyncResult(succes: false, message: 'Numéro patient introuvable');
+      }
 
-      // 2. Synchronise les prises non envoyées
-      final prisesSynced = await _syncPrises(patientId);
-      total += prisesSynced;
-
-      // 3. Synchronise les rappels
-      final rappelsSynced = await _syncRappels(patientId);
-      total += rappelsSynced;
-
-      // 4. Synchronise les rendez-vous
-      final rdvSynced = await _syncRendezVous(patientId);
-      total += rdvSynced;
+      await _syncProfil(patientId, numero);
+      total += await _syncPrises(patientId, numero);
+      total += await _syncRappels(patientId, numero);
+      total += await _syncRendezVous(patientId, numero);
 
       debugPrint('[SyncService] ✓ $total éléments synchronisés');
 
@@ -76,7 +81,7 @@ class SyncService {
   }
 
   // ── 1. Profil patient ─────────────────────────────────────────────────────
-  Future<void> _syncProfil(int patientId) async {
+  Future<void> _syncProfil(int patientId, String numero) async {
     try {
       final db = DatabaseService();
       final patients = await db.database.then(
@@ -88,7 +93,7 @@ class SyncService {
 
       await _firestore
           .collection('patients')
-          .doc(patientId.toString())
+          .doc(numero)
           .set({
         'nom':          patient['nom'],
         'numero':       patient['numero'],
@@ -105,13 +110,12 @@ class SyncService {
   }
 
   // ── 2. Prises (priorité haute — observance) ───────────────────────────────
-  Future<int> _syncPrises(int patientId) async {
+  Future<int> _syncPrises(int patientId, String numero) async {
     int count = 0;
     try {
       final db = DatabaseService();
       final dbInstance = await db.database;
 
-      // Récupère toutes les prises non synchronisées
       final prises = await dbInstance.query(
         'prises',
         where: 'patient_id = ? AND synchronise = 0',
@@ -123,18 +127,16 @@ class SyncService {
 
         await _firestore
             .collection('patients')
-            .doc(patientId.toString())
+            .doc(numero)
             .collection('prises')
             .doc(priseId)
             .set({
           'traitement_id': prise['traitement_id'],
-          'patient_id':    prise['patient_id'],
           'date_heure':    prise['date_heure'],
           'statut':        prise['statut'],
           'sync_at':       FieldValue.serverTimestamp(),
         });
 
-        // Marque comme synchronisée dans SQLite
         await dbInstance.update(
           'prises',
           {'synchronise': 1},
@@ -155,14 +157,12 @@ class SyncService {
   }
 
   // ── 3. Rappels ────────────────────────────────────────────────────────────
-  Future<int> _syncRappels(int patientId) async {
+  Future<int> _syncRappels(int patientId, String numero) async {
     int count = 0;
     try {
       final rappels = await DatabaseService().getRappels(patientId);
-
       if (rappels.isEmpty) return 0;
 
-      // Envoie tous les rappels actifs en un seul document
       final rappelsData = rappels.map((r) => {
         'id':             r['id'],
         'nom_medicament': r['nom_medicament'],
@@ -173,7 +173,7 @@ class SyncService {
 
       await _firestore
           .collection('patients')
-          .doc(patientId.toString())
+          .doc(numero)
           .set({
         'rappels':      rappelsData,
         'rappels_sync': FieldValue.serverTimestamp(),
@@ -188,17 +188,16 @@ class SyncService {
   }
 
   // ── 4. Rendez-vous ────────────────────────────────────────────────────────
-  Future<int> _syncRendezVous(int patientId) async {
+  Future<int> _syncRendezVous(int patientId, String numero) async {
     int count = 0;
     try {
       final rdvs = await DatabaseService().getRendezVous(patientId);
-
       if (rdvs.isEmpty) return 0;
 
       for (final rdv in rdvs) {
         await _firestore
             .collection('patients')
-            .doc(patientId.toString())
+            .doc(numero)
             .collection('rendez_vous')
             .doc(rdv['id'].toString())
             .set({
@@ -219,26 +218,29 @@ class SyncService {
   }
 
   // ── Écoute la connectivité et sync automatiquement ────────────────────────
-  /// À appeler une fois dans main.dart ou après le login
+  /// À appeler une fois dans main.dart ou après le login.
   void ecouterConnectivite() {
-    Connectivity().onConnectivityChanged.listen((result) {
-      if (result != ConnectivityResult.none) {
+    if (!firebaseDisponible) return;
+    Connectivity().onConnectivityChanged.listen((results) {
+      final connecte = results.any((r) => r != ConnectivityResult.none);
+      if (connecte) {
         debugPrint('[SyncService] Connexion détectée → synchronisation auto');
         synchroniser();
       }
     });
   }
 
-  // ── Calcule l'observance depuis Firestore (pour le soignant) ─────────────
-  Future<double> getObservanceFirestore(String patientId) async {
+  // ── Observance depuis Firestore (pour le soignant), par numéro patient ─────
+  Future<double?> getObservanceFirestore(String numero) async {
+    if (!firebaseDisponible) return null;
     try {
       final snapshot = await _firestore
           .collection('patients')
-          .doc(patientId)
+          .doc(numero)
           .collection('prises')
           .get();
 
-      if (snapshot.docs.isEmpty) return 0.0;
+      if (snapshot.docs.isEmpty) return null;
 
       final total = snapshot.docs.length;
       final prises = snapshot.docs
@@ -247,7 +249,7 @@ class SyncService {
 
       return (prises / total) * 100;
     } catch (e) {
-      return 0.0;
+      return null;
     }
   }
 }

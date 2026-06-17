@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
+import '../../core/services/sync_service.dart';
 import '../messagerie/messagerie_screen.dart';
 import 'ajouter_patient_screen.dart';
 
@@ -33,11 +34,17 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
       final nom = await SessionService().getSoignantNom();
       final patients = await DatabaseService().getTousPatients();
 
-      // Pour chaque patient, calcule son observance
+      // Pour chaque patient, calcule son observance.
+      // Source prioritaire : Firestore (données remontées par l'appareil du
+      // patient, via le numéro de téléphone) ; repli sur la base locale.
       final patientsAvecObservance = await Future.wait(
         patients.map((p) async {
-          final obs = await DatabaseService()
-              .getObservancePatient(p['id'] as int);
+          final numero = p['numero'] as String? ?? '';
+          double? obs;
+          if (numero.isNotEmpty) {
+            obs = await SyncService().getObservanceFirestore(numero);
+          }
+          obs ??= await DatabaseService().getObservancePatient(p['id'] as int);
           return {...p, 'observance': obs};
         }),
       );
@@ -1263,10 +1270,20 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
+                        onPressed: () async {
+                          final matricule =
+                              await SessionService().getSoignantMatricule() ??
+                                  DatabaseService.soignantDemoMatricule;
+                          final numero = patient['numero'] as String? ?? '';
+                          if (!context.mounted) return;
                           Navigator.push(context, MaterialPageRoute(
                             builder: (_) => MessagerieScreen(
-                              destinataireId: patient['id'].toString(),
+                              conversationId:
+                                  MessagerieScreen.conversationIdPour(
+                                patientNumero: numero,
+                                soignantMatricule: matricule,
+                              ),
+                              monId: matricule,
                               destinataireNom: patient['nom'] as String,
                               role: 'soignant',
                             ),

@@ -9,7 +9,9 @@ import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
 import '../../core/providers/langue_provider.dart';
 import '../../core/services/session_service.dart';
+import '../../core/services/database_service.dart';
 import '../auth/mot_de_passe_screen.dart';
+import '../messagerie/messagerie_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -529,6 +531,33 @@ class _ProfilScreenState extends State<ProfilScreen> {
                             ? 'English'
                             : 'Kiswahili',
                         onTap: _changerLangue,
+                        dernier: false,
+                      ),
+                      _OptionParametre(
+                        icone: Icons.chat_bubble_outline,
+                        couleurIcone: const Color(0xFF0288D1),
+                        fond: const Color(0xFFE3F2FD),
+                        label: 'Contacter mon soignant',
+                        onTap: () {
+                          final numero = patient.numero;
+                          if (numero.isEmpty) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MessagerieScreen(
+                                conversationId:
+                                    MessagerieScreen.conversationIdPour(
+                                  patientNumero: numero,
+                                  soignantMatricule:
+                                      DatabaseService.soignantDemoMatricule,
+                                ),
+                                monId: numero,
+                                destinataireNom: 'Dr. Yves Ndetereyuwe',
+                                role: 'patient',
+                              ),
+                            ),
+                          );
+                        },
                         dernier: false,
                       ),
                       _OptionParametre(

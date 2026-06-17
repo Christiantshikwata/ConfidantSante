@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../language/language_screen.dart';
 import '../../core/l10n/app_translations.dart';
+import '../../core/services/session_service.dart';
+import '../auth/login_patient_screen.dart';
+import '../patient/dashboard_patient_screen.dart';
+import '../soignant/dashboard_soignant_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -52,13 +56,34 @@ class _SplashScreenState extends State<SplashScreen>
       await Future.delayed(const Duration(seconds: 3));
       if (!mounted) return;
 
-      // Navigator.pushReplacement : on va vers l'écran de langue
-      // et on ne peut plus revenir au Splash en appuyant sur retour
+      Widget destination = const LanguageScreen();
+      try {
+        final session = SessionService();
+        final connecte = await session.estConnecte();
+        if (!mounted) return;
+
+        if (connecte) {
+          final role = await session.getRole();
+          if (!mounted) return;
+          if (role == 'soignant') {
+            destination = const DashboardSoignantScreen();
+          } else {
+            // Patient connecté : on exige le PIN s'il est configuré.
+            final pinOk = await session.pinConfigue();
+            if (!mounted) return;
+            destination = pinOk
+                ? const PinVerificationScreen()
+                : const DashboardPatientScreen();
+          }
+        }
+      } catch (_) {
+        destination = const LanguageScreen();
+      }
+      if (!mounted) return;
+
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const LanguageScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => destination),
       );
     }
 

@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'password_service.dart';
 
 class DatabaseService {
 
@@ -9,6 +10,9 @@ class DatabaseService {
   DatabaseService._internal();
 
   Database? _db;
+
+  // Matricule du soignant de démonstration (identité stable).
+  static const String soignantDemoMatricule = 'MED-2024-001';
 
   // Ouvre la base de données
   Future<Database> get database async {
@@ -23,31 +27,39 @@ class DatabaseService {
     return await openDatabase(
       cheminComplet,
       onCreate: _creerTables,
-      version: 4,
-        onUpgrade: (db, oldVersion, newVersion) async {
-   if (oldVersion < 2) {
-      await db.execute('CREATE TABLE IF NOT EXISTS rendez_vous ...');    }
-     if (oldVersion < 3) {
-      await db.execute('CREATE TABLE IF NOT EXISTS soignants ...');
-     await db.execute("INSERT OR IGNORE INTO soignants ...");}
-   if (oldVersion < 4) {
-     await db.execute('''
-      CREATE TABLE IF NOT EXISTS messages (
-        id               INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversation_id  TEXT    NOT NULL,
-        expediteur_id    TEXT    NOT NULL,
-        expediteur_role  TEXT    NOT NULL,
-        destinataire_id  TEXT    NOT NULL,
-        texte            TEXT    NOT NULL,
-        timestamp        TEXT    NOT NULL,
-        lu               INTEGER DEFAULT 0
-      )
-    ''');
-   }
-   },
+      version: 5,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _creerTableRendezVous(db);
+        }
+        if (oldVersion < 3) {
+          await _creerTableSoignants(db);
+          await _seedSoignant(db);
+        }
+        if (oldVersion < 4) {
+          await _creerTableMessages(db);
+        }
+        if (oldVersion < 5) {
+          // Ajoute la date de création des rappels (calcul d'observance).
+          await db.execute(
+            "ALTER TABLE rappels ADD COLUMN date_creation TEXT",
+          );
+          // Re-hache le mot de passe du soignant de démo (était en clair).
+          await db.update(
+            'soignants',
+            {
+              'mot_de_passe': PasswordService.hash(
+                identifiant: soignantDemoMatricule,
+                motDePasse: 'soignant123',
+              ),
+            },
+            where: 'matricule = ?',
+            whereArgs: [soignantDemoMatricule],
+          );
+        }
+      },
     );
   }
-
 
   // Crée toutes les tables au premier lancement
   Future<void> _creerTables(Database db, int version) async {
@@ -102,20 +114,33 @@ class DatabaseService {
         dosage TEXT,
         heure TEXT NOT NULL,
         est_actif INTEGER DEFAULT 1,
+        date_creation TEXT,
         FOREIGN KEY (patient_id) REFERENCES patients(id)
       )
     ''');
+
+    await _creerTableRendezVous(db);
+    await _creerTableSoignants(db);
+    await _seedSoignant(db);
+    await _creerTableMessages(db);
+  }
+
+  // ── Définitions de tables réutilisables (création + migration) ─────────────
+  Future<void> _creerTableRendezVous(Database db) async {
     await db.execute('''
-    CREATE TABLE IF NOT EXISTS rendez_vous (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      patient_id  INTEGER NOT NULL,
-      motif       TEXT    NOT NULL,
-      lieu        TEXT    DEFAULT '',
-      date        TEXT    NOT NULL,
-      statut      TEXT    DEFAULT 'planifie',
-      FOREIGN KEY (patient_id) REFERENCES patients(id)
-    )
-  ''');
+      CREATE TABLE IF NOT EXISTS rendez_vous (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id  INTEGER NOT NULL,
+        motif       TEXT    NOT NULL,
+        lieu        TEXT    DEFAULT '',
+        date        TEXT    NOT NULL,
+        statut      TEXT    DEFAULT 'planifie',
+        FOREIGN KEY (patient_id) REFERENCES patients(id)
+      )
+    ''');
+  }
+
+  Future<void> _creerTableSoignants(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS soignants (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,35 +152,44 @@ class DatabaseService {
         date_creation TEXT
       )
     ''');
+  }
+
+  Future<void> _seedSoignant(Database db) async {
     await db.insert(
       'soignants',
       {
         'nom':          'Dr. Yves Ndetereyuwe',
-        'matricule':    'MED-2024-001',
-        'mot_de_passe': 'soignant123',
+        'matricule':    soignantDemoMatricule,
+        'mot_de_passe': PasswordService.hash(
+          identifiant: soignantDemoMatricule,
+          motDePasse: 'soignant123',
+        ),
         'specialite':   'Médecin infectiologue',
         'service':      'VIH/SIDA',
         'date_creation': DateTime.now().toIso8601String(),
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+  }
+
+  Future<void> _creerTableMessages(Database db) async {
     await db.execute('''
-    CREATE TABLE IF NOT EXISTS messages (
-      id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      conversation_id  TEXT    NOT NULL,
-      expediteur_id    TEXT    NOT NULL,
-      expediteur_role  TEXT    NOT NULL,
-      destinataire_id  TEXT    NOT NULL,
-      texte            TEXT    NOT NULL,
-      timestamp        TEXT    NOT NULL,
-      lu               INTEGER DEFAULT 0
-    )
-  ''');
+      CREATE TABLE IF NOT EXISTS messages (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id  TEXT    NOT NULL,
+        expediteur_id    TEXT    NOT NULL,
+        expediteur_role  TEXT    NOT NULL,
+        destinataire_id  TEXT    NOT NULL,
+        texte            TEXT    NOT NULL,
+        timestamp        TEXT    NOT NULL,
+        lu               INTEGER DEFAULT 0
+      )
+    ''');
   }
 
   // ── PATIENTS ──────────────────────────────────────────────────────────────
 
-  // Crée un nouveau patient
+  // Crée un nouveau patient (mot de passe haché)
   Future<int> creerPatient({
     required String nom,
     required String numero,
@@ -167,14 +201,17 @@ class DatabaseService {
       {
         'nom': nom,
         'numero': numero,
-        'mot_de_passe': motDePasse,
+        'mot_de_passe': PasswordService.hash(
+          identifiant: numero,
+          motDePasse: motDePasse,
+        ),
         'date_creation': DateTime.now().toIso8601String(),
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }
 
-  // Vérifie les identifiants de connexion
+  // Vérifie les identifiants de connexion (comparaison du hachage)
   Future<Map<String, dynamic>?> connecterPatient({
     required String numero,
     required String motDePasse,
@@ -182,10 +219,18 @@ class DatabaseService {
     final db = await database;
     final resultats = await db.query(
       'patients',
-      where: 'numero = ? AND mot_de_passe = ?',
-      whereArgs: [numero, motDePasse],
+      where: 'numero = ?',
+      whereArgs: [numero],
     );
-    return resultats.isNotEmpty ? resultats.first : null;
+    if (resultats.isEmpty) return null;
+    final patient = resultats.first;
+    final hachage = patient['mot_de_passe'] as String? ?? '';
+    final ok = PasswordService.verifier(
+      identifiant: numero,
+      motDePasse: motDePasse,
+      hachageStocke: hachage,
+    );
+    return ok ? patient : null;
   }
 
   // Récupère un patient par son numéro
@@ -226,6 +271,7 @@ class DatabaseService {
       'dosage': dosage,
       'heure': heure,
       'est_actif': 1,
+      'date_creation': DateTime.now().toIso8601String(),
     });
   }
 
@@ -253,13 +299,20 @@ class DatabaseService {
 
   // ── PRISES ────────────────────────────────────────────────────────────────
 
-  // Enregistre une prise de médicament
+  /// Enregistre une prise de médicament.
+  /// Idempotent : une seule prise par rappel et par jour. Retourne l'id inséré,
+  /// ou 0 si une prise existait déjà aujourd'hui pour ce rappel.
   Future<int> enregistrerPrise({
     required int traitementId,
     required int patientId,
     required String statut,
   }) async {
     final db = await database;
+
+    if (statut == 'pris' && await aPrisAujourdhui(traitementId, patientId)) {
+      return 0;
+    }
+
     return await db.insert('prises', {
       'traitement_id': traitementId,
       'patient_id': patientId,
@@ -267,6 +320,33 @@ class DatabaseService {
       'statut': statut,
       'synchronise': 0,
     });
+  }
+
+  /// Indique si une prise « pris » a déjà été enregistrée aujourd'hui pour ce rappel.
+  Future<bool> aPrisAujourdhui(int traitementId, int patientId) async {
+    final db = await database;
+    final aujourd = DateTime.now();
+    final debut = DateTime(aujourd.year, aujourd.month, aujourd.day)
+        .toIso8601String();
+    final fin = DateTime(aujourd.year, aujourd.month, aujourd.day, 23, 59, 59)
+        .toIso8601String();
+    final res = await db.query(
+      'prises',
+      where:
+          'traitement_id = ? AND patient_id = ? AND statut = ? AND date_heure BETWEEN ? AND ?',
+      whereArgs: [traitementId, patientId, 'pris', debut, fin],
+      limit: 1,
+    );
+    return res.isNotEmpty;
+  }
+
+  /// Ensemble des ids de rappels pris aujourd'hui (pour l'état des cases UI).
+  Future<Set<int>> getPrisesIdsAujourdhui(int patientId) async {
+    final prises = await getPrisesAujourdhui(patientId);
+    return prises
+        .where((p) => p['statut'] == 'pris')
+        .map((p) => p['traitement_id'] as int)
+        .toSet();
   }
 
   // Récupère les prises du jour
@@ -277,7 +357,7 @@ class DatabaseService {
     final aujourd = DateTime.now();
     final debut = DateTime(aujourd.year, aujourd.month, aujourd.day)
         .toIso8601String();
-    final fin = DateTime(aujourd.year, aujourd.month, aujourd.day, 23, 59)
+    final fin = DateTime(aujourd.year, aujourd.month, aujourd.day, 23, 59, 59)
         .toIso8601String();
 
     return await db.query(
@@ -288,23 +368,56 @@ class DatabaseService {
     );
   }
 
-  // Calcule le taux d'observance sur 30 jours
+  /// Calcule le taux d'observance sur 30 jours.
+  ///
+  /// Observance = doses prises / doses attendues, où les doses attendues sont
+  /// estimées à partir de chaque rappel actif et de sa date de création
+  /// (une dose attendue par jour depuis la création, plafonnée à 30 jours).
+  /// Une prise par rappel et par jour est comptée au maximum.
   Future<double> getTauxObservance(int patientId) async {
     final db = await database;
-    final debut = DateTime.now()
-        .subtract(const Duration(days: 30))
-        .toIso8601String();
+    final maintenant = DateTime.now();
+    final debutFenetre = DateTime(maintenant.year, maintenant.month, maintenant.day)
+        .subtract(const Duration(days: 29));
 
-    final total = await db.query(
-      'prises',
-      where: 'patient_id = ? AND date_heure > ?',
-      whereArgs: [patientId, debut],
+    final rappels = await db.query(
+      'rappels',
+      where: 'patient_id = ? AND est_actif = 1',
+      whereArgs: [patientId],
     );
+    if (rappels.isEmpty) return 0.0;
 
-    if (total.isEmpty) return 0.0;
+    // Doses attendues
+    int attendues = 0;
+    for (final r in rappels) {
+      final creationStr = r['date_creation'] as String?;
+      final creation = creationStr != null
+          ? DateTime.tryParse(creationStr)
+          : null;
+      final debutRappel =
+          (creation != null && creation.isAfter(debutFenetre))
+              ? DateTime(creation.year, creation.month, creation.day)
+              : debutFenetre;
+      final jours = maintenant.difference(debutRappel).inDays + 1;
+      attendues += jours.clamp(1, 30);
+    }
+    if (attendues == 0) return 0.0;
 
-    final prises = total.where((p) => p['statut'] == 'pris').length;
-    return (prises / total.length) * 100;
+    // Doses prises distinctes (rappel, jour) sur 30 jours
+    final prises = await db.query(
+      'prises',
+      where: 'patient_id = ? AND statut = ? AND date_heure > ?',
+      whereArgs: [patientId, 'pris', debutFenetre.toIso8601String()],
+    );
+    final joursPris = <String>{};
+    for (final p in prises) {
+      final dt = DateTime.tryParse(p['date_heure'] as String? ?? '');
+      if (dt == null) continue;
+      joursPris.add('${p['traitement_id']}_${dt.year}-${dt.month}-${dt.day}');
+    }
+
+    final taux = (joursPris.length / attendues) * 100;
+    return taux.clamp(0, 100).toDouble();
   }
 
   // Récupère l'historique des 30 derniers jours
@@ -324,7 +437,7 @@ class DatabaseService {
     );
   }
 
-  // ── TRAITEMENTS ───────────────────────────────────────────────────────────
+  // ── RENDEZ-VOUS ────────────────────────────────────────────────────────────
   /// Récupère tous les rendez-vous d'un patient
   Future<List<Map<String, dynamic>>> getRendezVous(int patientId) async {
     final db = await database;
@@ -355,62 +468,6 @@ class DatabaseService {
     );
     return res.isNotEmpty ? res.first : null;
   }
-    // ── SOIGNANTS ─────────────────────────────────────────────────────────────
-
-    /// Vérifie les identifiants du soignant
-    Future<Map<String, dynamic>?> connecterSoignant({
-      required String matricule,
-      required String motDePasse,
-    }) async {
-      final db = await database;
-      final res = await db.query(
-        'soignants',
-        where: 'matricule = ? AND mot_de_passe = ?',
-        whereArgs: [matricule, motDePasse],
-      );
-      return res.isNotEmpty ? res.first : null;
-    }
-
-    /// Récupère tous les patients (pour le dashboard soignant)
-    Future<List<Map<String, dynamic>>> getTousPatients() async {
-      final db = await database;
-      return await db.query('patients', orderBy: 'nom ASC');
-    }
-
-    /// Crée un patient depuis le dashboard soignant
-    Future<int> creerPatientParSoignant({
-      required String nom,
-      required String numero,
-      required String motDePasse,
-      String? soignant,
-      String? hopital,
-    }) async {
-      final db = await database;
-      return await db.insert(
-        'patients',
-        {
-          'nom':          nom,
-          'numero':       numero,
-          'mot_de_passe': motDePasse,
-          'soignant':     soignant ?? 'Dr. Yves Ndetereyuwe',
-          'hopital':      hopital ?? 'Centre Hospitalier Congo-Chine',
-          'date_creation': DateTime.now().toIso8601String(),
-        },
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
-    }
-
-    /// Calcule le taux d'observance d'un patient spécifique
-    Future<double> getObservancePatient(int patientId) async {
-      return await getTauxObservance(patientId);
-    }
-
-    /// Vérifie si un numéro de patient existe déjà
-    Future<bool> numeroExiste(String numero) async {
-      return await patientExiste(numero);
-    }
-
-    // ── RENDEZ-VOUS ──────────────────────────────────────────────────────────
 
   Future<int> ajouterRendezVous({
     required int patientId,
@@ -427,6 +484,74 @@ class DatabaseService {
       'statut':     'planifie',
     });
   }
+
+  // ── SOIGNANTS ─────────────────────────────────────────────────────────────
+
+  /// Vérifie les identifiants du soignant (comparaison du hachage)
+  Future<Map<String, dynamic>?> connecterSoignant({
+    required String matricule,
+    required String motDePasse,
+  }) async {
+    final db = await database;
+    final res = await db.query(
+      'soignants',
+      where: 'matricule = ?',
+      whereArgs: [matricule],
+    );
+    if (res.isEmpty) return null;
+    final soignant = res.first;
+    final ok = PasswordService.verifier(
+      identifiant: matricule,
+      motDePasse: motDePasse,
+      hachageStocke: soignant['mot_de_passe'] as String? ?? '',
+    );
+    return ok ? soignant : null;
+  }
+
+  /// Récupère tous les patients (pour le dashboard soignant)
+  Future<List<Map<String, dynamic>>> getTousPatients() async {
+    final db = await database;
+    return await db.query('patients', orderBy: 'nom ASC');
+  }
+
+  /// Crée un patient depuis le dashboard soignant (mot de passe haché)
+  Future<int> creerPatientParSoignant({
+    required String nom,
+    required String numero,
+    required String motDePasse,
+    String? soignant,
+    String? hopital,
+  }) async {
+    final db = await database;
+    return await db.insert(
+      'patients',
+      {
+        'nom':          nom,
+        'numero':       numero,
+        'mot_de_passe': PasswordService.hash(
+          identifiant: numero,
+          motDePasse: motDePasse,
+        ),
+        'soignant':     soignant ?? 'Dr. Yves Ndetereyuwe',
+        'hopital':      hopital ?? 'Centre Hospitalier Congo-Chine',
+        'date_creation': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Calcule le taux d'observance d'un patient spécifique (local)
+  Future<double> getObservancePatient(int patientId) async {
+    return await getTauxObservance(patientId);
+  }
+
+  /// Vérifie si un numéro de patient existe déjà
+  Future<bool> numeroExiste(String numero) async {
+    return await patientExiste(numero);
+  }
+
+  // ── TRAITEMENTS ───────────────────────────────────────────────────────────
+
   // Ajoute un traitement
   Future<int> ajouterTraitement({
     required int patientId,
@@ -465,6 +590,8 @@ class DatabaseService {
       _db = null;
     }
   }
+
+  // ── MESSAGES (cache local, complément du temps réel Firestore) ─────────────
   Future<int> envoyerMessage({
     required String conversationId,
     required String expediteurId,

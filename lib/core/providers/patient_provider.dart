@@ -19,6 +19,9 @@ class PatientProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _traitements = [];
   List<Map<String, dynamic>> _historique  = [];
 
+  // Ids des rappels déjà pris aujourd'hui
+  Set<int> _prisAujourdhui = {};
+
   // Getters
   int?    get patientId   => _patientId;
   String  get nom         => _nom;
@@ -29,6 +32,10 @@ class PatientProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get rappels     => _rappels;
   List<Map<String, dynamic>> get traitements => _traitements;
   List<Map<String, dynamic>> get historique  => _historique;
+  Set<int> get prisAujourdhui => _prisAujourdhui;
+
+  /// Indique si un rappel a déjà été marqué pris aujourd'hui.
+  bool estPrisAujourdhui(int rappelId) => _prisAujourdhui.contains(rappelId);
 
   // Charge toutes les données du patient depuis SQLite
   Future<void> chargerDonnees() async {
@@ -55,6 +62,10 @@ class PatientProvider extends ChangeNotifier {
 
     // Charge l'historique
     _historique = await DatabaseService().getHistorique30j(_patientId!);
+
+    // Prises déjà effectuées aujourd'hui
+    _prisAujourdhui =
+        await DatabaseService().getPrisesIdsAujourdhui(_patientId!);
 
     // Calcule les jours actifs
     _joursActifs = _historique

@@ -700,6 +700,8 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
     });
   }
 
+  static const int _maxTentatives = 5;
+
   Future<void> _verifierPin() async {
     final ok = await SessionService().verifierPin(_pin);
     if (!mounted) return;
@@ -715,6 +717,16 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
         _tentatives++;
         _pin = '';
       });
+
+      // Verrouillage : trop de tentatives → déconnexion forcée.
+      if (_tentatives >= _maxTentatives) {
+        await SessionService().deconnecter();
+        if (!mounted) return;
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/role',
+          (route) => false,
+        );
+      }
     }
   }
 
@@ -794,7 +806,7 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _tentatives >= 3
+                  _tentatives >= _maxTentatives - 1
                       ? 'Trop de tentatives. Reconnectez-vous.'
                       : 'PIN incorrect. Réessayez.',
                   textAlign: TextAlign.center,
