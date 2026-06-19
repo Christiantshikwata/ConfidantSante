@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'core/constants/app_colors.dart';
 import 'core/services/database_service.dart';
@@ -14,6 +15,10 @@ import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialise les données de locale pour le formatage des dates (fr_FR, etc.).
+  // Sans ça, DateFormat('…','fr_FR') plante (écran rouge sur les rendez-vous).
+  await initializeDateFormatting('fr_FR', null);
 
   // Initialise Firebase. Si l'init échoue, l'app continue en mode 100% local.
   try {

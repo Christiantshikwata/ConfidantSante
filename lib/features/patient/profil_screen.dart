@@ -12,6 +12,7 @@ import '../../core/services/session_service.dart';
 import '../../core/services/database_service.dart';
 import '../auth/mot_de_passe_screen.dart';
 import '../messagerie/messagerie_screen.dart';
+import 'profile/parametres_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -25,16 +26,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
   // ── MÉTHODES ──────────────────────────────────────────────────────────────
 
   void _ouvrirParametres() {
-    // TODO : naviguer vers ParametresScreen quand le fichier est créé
-    // Navigator.push(context, MaterialPageRoute(builder: (_) => const ParametresScreen()));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(AppTranslations.t('parametres')),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.primary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ParametresScreen()),
     );
   }
 
