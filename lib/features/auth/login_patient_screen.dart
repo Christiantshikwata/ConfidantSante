@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
+import '../../core/services/sync_service.dart';
+import '../../core/services/password_service.dart';
 import 'mot_de_passe_screen.dart';
 import '../../core/services/biometric_service.dart';
 import 'package:confidantsante/features/patient/dashboard_patient_screen.dart';
@@ -97,10 +99,36 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
       _erreur = null;
     });
 
-    final patient = await DatabaseService().connecterPatient(
-      numero: _numeroController.text.trim(),
-      motDePasse: _mdpController.text,
+    final numero = _numeroController.text.trim();
+    final motDePasse = _mdpController.text;
+
+    var patient = await DatabaseService().connecterPatient(
+      numero: numero,
+      motDePasse: motDePasse,
     );
+
+    // Repli : compte créé par le médecin sur un autre appareil → Firestore.
+    if (patient == null) {
+      final distant = await SyncService().recupererComptePatient(numero);
+      if (distant != null) {
+        final hash = distant['mot_de_passe'] as String? ?? '';
+        final ok = PasswordService.verifier(
+          identifiant: numero,
+          motDePasse: motDePasse,
+          hachageStocke: hash,
+        );
+        if (ok) {
+          await DatabaseService().creerPatientAvecHash(
+            nom:            distant['nom'] as String? ?? '',
+            numero:         numero,
+            hashMotDePasse: hash,
+            soignant:       distant['soignant'] as String?,
+            hopital:        distant['hopital'] as String?,
+          );
+          patient = await DatabaseService().getPatient(numero);
+        }
+      }
+    }
 
     if (!mounted) return;
 

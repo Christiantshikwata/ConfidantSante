@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/sync_service.dart';
+import '../../core/services/password_service.dart';
 
 class AjouterPatientScreen extends StatefulWidget {
   const AjouterPatientScreen({super.key});
@@ -35,6 +37,7 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
     'Autre',
   ];
   String _protocoleChoisi = 'Lamivudine + Efavirenz + Ténofovir';
+  int _dureeMois = 1;
 
   @override
   void dispose() {
@@ -55,25 +58,57 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
         return;
       }
 
+      final nom    = _nomCtrl.text.trim();
+      final numero = _numeroCtrl.text.trim();
+      final pwd    = _mdpCtrl.text;
+
       final id = await DatabaseService().creerPatientParSoignant(
-        nom:        _nomCtrl.text.trim(),
-        numero:     _numeroCtrl.text.trim(),
-        motDePasse: _mdpCtrl.text,
+        nom:        nom,
+        numero:     numero,
+        motDePasse: pwd,
         soignant:   'Dr. Yves Ndetereyuwe',
         hopital:    'Centre Hospitalier Congo-Chine',
       );
 
       if (id > 0) {
-        await DatabaseService().ajouterTraitement(
+        // Pousse le compte vers Firestore → le patient peut se connecter
+        // sur son propre téléphone (même numéro + mot de passe).
+        await SyncService().pousserComptePatient(
+          numero:         numero,
+          nom:            nom,
+          hashMotDePasse:
+              PasswordService.hash(identifiant: numero, motDePasse: pwd),
+          soignant:       'Dr. Yves Ndetereyuwe',
+          hopital:        'Centre Hospitalier Congo-Chine',
+        );
+
+        // Attribue le protocole : l'heure sera choisie par le patient.
+        final tid = await DatabaseService().assignerProtocole(
           patientId:     id,
           nomMedicament: _protocoleChoisi,
           dosage:        '1 comprimé/jour',
-          heure:         '08h00',
+          dureeMois:     _dureeMois,
         );
-        setState(() => _succes = 'Patient ${_nomCtrl.text.trim()} créé avec succès !');
+        final row = await DatabaseService().getTraitementParId(tid);
+        if (row != null) {
+          await SyncService().pousserProtocole(
+            numero:        numero,
+            idLocal:       tid.toString(),
+            nomMedicament: row['nom_medicament'] as String? ?? '',
+            dosage:        row['dosage'] as String? ?? '',
+            dateDebut:     row['date_debut'] as String?,
+            dateFin:       row['date_fin'] as String?,
+            dureeMois:     row['duree_mois'] as int?,
+          );
+        }
+
+        setState(() => _succes = 'Patient $nom créé avec succès !');
         _formKey.currentState!.reset();
         _nomCtrl.clear(); _numeroCtrl.clear(); _mdpCtrl.clear();
-        setState(() => _protocoleChoisi = _protocoles.first);
+        setState(() {
+          _protocoleChoisi = _protocoles.first;
+          _dureeMois = 1;
+        });
       } else {
         setState(() => _erreur = 'Erreur lors de la création du patient.');
       }
@@ -293,6 +328,47 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
                           onChanged: (v) { if (v != null) setState(() => _protocoleChoisi = v); },
                         ),
                       ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Durée du protocole
+                    _LabelChamp('Durée du protocole'),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [1, 3, 6].map((m) {
+                        final actif = _dureeMois == m;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _dureeMois = m),
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: actif
+                                    ? const Color(0xFF0288D1)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: actif
+                                      ? const Color(0xFF0288D1)
+                                      : const Color(0xFFE0E7EF),
+                                ),
+                              ),
+                              child: Center(
+                                child: Text('$m mois',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: actif
+                                          ? Colors.white
+                                          : AppColors.textSecondary,
+                                    )),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
 
                     if (_erreur != null) ...[

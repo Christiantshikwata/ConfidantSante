@@ -566,6 +566,30 @@ class DatabaseService {
     return await patientExiste(numero);
   }
 
+  /// Crée un patient avec un mot de passe DÉJÀ haché (compte récupéré de
+  /// Firestore lors d'une première connexion sur le téléphone du patient).
+  Future<int> creerPatientAvecHash({
+    required String nom,
+    required String numero,
+    required String hashMotDePasse,
+    String? soignant,
+    String? hopital,
+  }) async {
+    final db = await database;
+    return await db.insert(
+      'patients',
+      {
+        'nom':           nom,
+        'numero':        numero,
+        'mot_de_passe':  hashMotDePasse,
+        'soignant':      soignant,
+        'hopital':       hopital,
+        'date_creation': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
   // ── TRAITEMENTS ───────────────────────────────────────────────────────────
 
   // Ajoute un traitement

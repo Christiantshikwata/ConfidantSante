@@ -230,6 +230,46 @@ class SyncService {
     });
   }
 
+  // ── Comptes patients (médecin → Firestore → patient) ───────────────────────
+
+  /// Médecin : pousse le compte patient (profil + mot de passe haché) vers
+  /// Firestore, pour que le patient puisse se connecter sur son téléphone.
+  Future<void> pousserComptePatient({
+    required String numero,
+    required String nom,
+    required String hashMotDePasse,
+    String? soignant,
+    String? hopital,
+  }) async {
+    if (!firebaseDisponible) return;
+    try {
+      await _firestore.collection('patients').doc(numero).set({
+        'nom':          nom,
+        'numero':       numero,
+        'mot_de_passe': hashMotDePasse,
+        'soignant':     soignant,
+        'hopital':      hopital,
+        'compte_cree':  FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pousserComptePatient : $e');
+    }
+  }
+
+  /// Patient : récupère le compte (profil + hash) depuis Firestore, s'il existe.
+  Future<Map<String, dynamic>?> recupererComptePatient(String numero) async {
+    if (!firebaseDisponible) return null;
+    try {
+      final doc =
+          await _firestore.collection('patients').doc(numero).get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (e) {
+      debugPrint('[SyncService] Erreur recupererComptePatient : $e');
+      return null;
+    }
+  }
+
   // ── Protocoles (médecin → patient) ─────────────────────────────────────────
 
   /// Médecin : pousse un protocole vers Firestore (sous le numéro du patient).
