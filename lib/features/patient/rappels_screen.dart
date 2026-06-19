@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
+import '../../core/providers/langue_provider.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/notification_service.dart';
 
@@ -31,6 +33,9 @@ class _RappelsScreenState extends State<RappelsScreen>
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LangueProvider>();
+    final t = AppTranslations.t;
+
     return Consumer<PatientProvider>(
       builder: (context, patient, _) {
 
@@ -55,13 +60,13 @@ class _RappelsScreenState extends State<RappelsScreen>
                   child: Column(
                     children: [
 
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Rappels',
-                            style: TextStyle(
+                            t('rappels'),
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
@@ -79,19 +84,19 @@ class _RappelsScreenState extends State<RappelsScreen>
                           children: [
                             _StatRapide(
                               valeur: '${rappels.length}',
-                              label: 'Médicaments',
+                              label: t('medicaments'),
                               couleur: Colors.white,
                             ),
                             const SizedBox(width: 8),
                             _StatRapide(
                               valeur: '${patient.prisAujourdhui.length}',
-                              label: 'Prises aujourd\'hui',
+                              label: t('prises_aujourdhui'),
                               couleur: Colors.white.withValues(alpha: 0.75),
                             ),
                             const SizedBox(width: 8),
                             _StatRapide(
                               valeur: '${patient.observance.toInt()}%',
-                              label: 'Observance',
+                              label: t('observance_court'),
                               couleur: Colors.white.withValues(alpha: 0.5),
                             ),
                           ],
@@ -112,10 +117,10 @@ class _RappelsScreenState extends State<RappelsScreen>
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
-                        tabs: const [
-                          Tab(text: "Aujourd'hui"),
-                          Tab(text: 'Cette semaine'),
-                          Tab(text: 'Historique'),
+                        tabs: [
+                          Tab(text: t('onglet_aujourdhui')),
+                          Tab(text: t('onglet_semaine')),
+                          Tab(text: t('onglet_historique')),
                         ],
                       ),
 
@@ -208,6 +213,7 @@ class _OngletAujourdhui extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTranslations.t;
     if (rappels.isEmpty && protocoles.isEmpty) {
       return Center(
         child: Column(
@@ -219,21 +225,21 @@ class _OngletAujourdhui extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Aucun traitement pour le moment',
-              style: TextStyle(
+            Text(
+              t('aucun_traitement'),
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 40),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
               child: Text(
-                'Votre médecin vous attribuera un traitement.\nIl apparaîtra ici.',
+                t('aucun_traitement_desc'),
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
                 ),
@@ -263,7 +269,7 @@ class _OngletAujourdhui extends StatelessWidget {
                   size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
               Text(
-                'À configurer (${protocoles.length})',
+                '${t('a_configurer')} (${protocoles.length})',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -294,10 +300,10 @@ class _OngletAujourdhui extends StatelessWidget {
                 size: 14, color: AppColors.primary,
               ),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Mode hors-ligne — données sauvegardées sur l\'appareil',
-                  style: TextStyle(
+                  t('mode_hors_ligne'),
+                  style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.primary,
                     fontWeight: FontWeight.w500,
@@ -468,9 +474,9 @@ class _CarteProtocole extends StatelessWidget {
           TextButton(
             onPressed: () => _definirHeure(context),
             style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-            child: const Text(
-              'Définir l\'heure',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            child: Text(
+              AppTranslations.t('definir_heure'),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -1010,6 +1016,7 @@ class _OngletHistorique extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTranslations.t;
     if (historique.isEmpty) {
       return Center(
         child: Column(
@@ -1021,17 +1028,17 @@ class _OngletHistorique extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Aucun historique disponible',
-              style: TextStyle(
+            Text(
+              t('aucun_historique'),
+              style: const TextStyle(
                 fontSize: 15,
                 color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Confirmez vos prises pour voir l\'historique',
-              style: TextStyle(
+            Text(
+              t('historique_vide_desc'),
+              style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
               ),
@@ -1069,9 +1076,9 @@ class _OngletHistorique extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Taux d\'observance',
-                      style: TextStyle(
+                    Text(
+                      t('taux_observance'),
+                      style: const TextStyle(
                         color: Colors.white70, fontSize: 13,
                       ),
                     ),
@@ -1085,7 +1092,7 @@ class _OngletHistorique extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '$prises prises sur $totalPrises',
+                      '$prises/$totalPrises ${t('prises_label')}',
                       style: const TextStyle(
                         color: Colors.white60, fontSize: 12,
                       ),
@@ -1102,9 +1109,9 @@ class _OngletHistorique extends StatelessWidget {
         ),
 
         // Liste des prises
-        const Text(
-          'Détail des prises',
-          style: TextStyle(
+        Text(
+          t('detail_prises'),
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
@@ -1154,7 +1161,7 @@ class _OngletHistorique extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        estPris ? 'Prise confirmée' : 'Prise manquée',
+                        estPris ? t('prise_confirmee') : t('prise_manquee'),
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

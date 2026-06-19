@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
+import '../../core/providers/langue_provider.dart';
 import 'agenda_screen.dart';
 import 'rappels_screen.dart';
 import 'discretion_screen.dart';
@@ -31,6 +33,9 @@ class _DashboardPatientScreenState
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LangueProvider>();
+    final t = AppTranslations.t;
+
     final pages = [
       const _PageAccueil(),
       const RappelsScreen(),
@@ -71,26 +76,26 @@ class _DashboardPatientScreenState
             fontWeight: FontWeight.w600,
           ),
           unselectedLabelStyle: const TextStyle(fontSize: 11),
-          items: const [
+          items: [
             BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Accueil',
+              icon: const Icon(Icons.home_outlined),
+              activeIcon: const Icon(Icons.home),
+              label: t('accueil'),
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.alarm_outlined),
-              activeIcon: Icon(Icons.alarm),
-              label: 'Rappels',
+              icon: const Icon(Icons.alarm_outlined),
+              activeIcon: const Icon(Icons.alarm),
+              label: t('rappels'),
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.shield_outlined),
-              activeIcon: Icon(Icons.shield),
-              label: 'Discrétion',
+              icon: const Icon(Icons.shield_outlined),
+              activeIcon: const Icon(Icons.shield),
+              label: t('discretion'),
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profil',
+              icon: const Icon(Icons.person_outline),
+              activeIcon: const Icon(Icons.person),
+              label: t('profil'),
             ),
           ],
         ),
@@ -104,16 +109,17 @@ class _DashboardPatientScreenState
 class _PageAccueil extends StatelessWidget {
   const _PageAccueil();
 
-  static String _salutation() {
+  static String _salutationCle() {
     final h = DateTime.now().hour;
-    if (h < 12) return 'Bonjour,';
-    if (h < 17) return 'Bon après-midi,';
-
-    return 'Bonsoir,';
+    if (h < 12) return 'bonjour';
+    if (h < 17) return 'bon_apres_midi';
+    return 'bonsoir';
   }
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LangueProvider>();
+    final t = AppTranslations.t;
 
     // Consumer écoute les changements du PatientProvider
     return Consumer<PatientProvider>(
@@ -165,7 +171,7 @@ class _PageAccueil extends StatelessWidget {
                                 CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _salutation(),
+                                    t(_salutationCle()),
                                     style: TextStyle(
                                       color: Colors.white
                                           .withValues(alpha: 0.75),
@@ -177,7 +183,7 @@ class _PageAccueil extends StatelessWidget {
                                     // Affiche le vrai nom depuis SQLite
                                     patient.nom.isNotEmpty
                                         ? patient.nom
-                                        : 'Patient',
+                                        : t('patient'),
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 20,
@@ -232,7 +238,7 @@ class _PageAccueil extends StatelessWidget {
                                 MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'Observance du mois',
+                                    t('observance'),
                                     style: TextStyle(
                                       color: Colors.white
                                           .withValues(alpha: 0.8),
@@ -269,7 +275,7 @@ class _PageAccueil extends StatelessWidget {
                                 MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    '${patient.joursActifs} prises effectuées',
+                                    '${patient.joursActifs} ${t('prises_effectuees')}',
                                     style: TextStyle(
                                       color: Colors.white
                                           .withValues(alpha: 0.65),
@@ -277,7 +283,7 @@ class _PageAccueil extends StatelessWidget {
                                     ),
                                   ),
                                   Text(
-                                    '${patient.historique.length - patient.joursActifs} manquées',
+                                    '${patient.historique.length - patient.joursActifs} ${t('manquees')}',
                                     style: TextStyle(
                                       color: Colors.white
                                           .withValues(alpha: 0.65),
@@ -310,7 +316,7 @@ class _PageAccueil extends StatelessWidget {
                         icone: Icons.alarm_outlined,
                         // Vrai nombre de rappels
                         valeur: '${patient.rappels.length}',
-                        label: "Rappels configurés",
+                        label: t('rappels_configures'),
                         couleur: AppColors.primary,
                         fondCouleur: AppColors.primaryPale,
                       ),
@@ -318,7 +324,7 @@ class _PageAccueil extends StatelessWidget {
                       _CarteStatistique(
                         icone: Icons.calendar_today_outlined,
                         valeur: '${patient.joursActifs}',
-                        label: 'Jours actifs',
+                        label: t('jours_actifs'),
                         couleur: AppColors.success,
                         fondCouleur: const Color(0xFFE8F5E9),
                       ),
@@ -331,9 +337,9 @@ class _PageAccueil extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Médicaments du jour',
-                        style: TextStyle(
+                      Text(
+                        t('medicaments_du_jour'),
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
@@ -378,18 +384,18 @@ class _PageAccueil extends StatelessWidget {
                             color: AppColors.primary.withValues(alpha: 0.3),
                           ),
                           const SizedBox(height: 12),
-                          const Text(
-                            'Aucun rappel configuré',
-                            style: TextStyle(
+                          Text(
+                            t('aucun_rappel'),
+                            style: const TextStyle(
                               fontSize: 14,
                               color: AppColors.textSecondary,
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'Ajoutez vos médicaments dans l\'onglet Rappels',
+                          Text(
+                            t('aucun_rappel_desc'),
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
                             ),

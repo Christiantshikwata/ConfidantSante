@@ -156,6 +156,9 @@ class AppTranslations {
 
       // Navigation
       'accueil':           'Accueil',
+      'observance_court':  'Observance',
+      'prises_label':      'prises',
+      'historique_vide_desc':'Confirmez vos prises pour voir l\'historique',
     },
 
     // ── ENGLISH ──────────────────────────────────────────────────
@@ -300,6 +303,9 @@ class AppTranslations {
       'centre_hospitalier':  'Congo-China Hospital Center',
 
       'accueil':           'Home',
+      'observance_court':  'Adherence',
+      'prises_label':      'doses',
+      'historique_vide_desc':'Confirm your doses to see history',
     },
 
     // ── KISWAHILI ────────────────────────────────────────────────
@@ -444,6 +450,9 @@ class AppTranslations {
       'centre_hospitalier':  'Kituo cha Hospitali cha Congo-China',
 
       'accueil':           'Nyumbani',
+      'observance_court':  'Uzingativu',
+      'prises_label':      'dozi',
+      'historique_vide_desc':'Thibitisha dozi zako kuona historia',
     },
   };
 
