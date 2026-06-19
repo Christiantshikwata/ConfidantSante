@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
+import '../../core/providers/langue_provider.dart';
 import 'login_patient_screen.dart';
 import 'login_soignant_screen.dart';
 //import '../soignant/dashboard_soignant_screen.dart';
@@ -17,6 +20,9 @@ class _RoleScreenState extends State<RoleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LangueProvider>();
+    final t = AppTranslations.t;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
@@ -29,9 +35,9 @@ class _RoleScreenState extends State<RoleScreen> {
               const SizedBox(height: 40),
 
               // En-tête
-              const Text(
-                'Vous êtes ?',
-                style: TextStyle(
+              Text(
+                t('role_question'),
+                style: const TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
@@ -41,10 +47,9 @@ class _RoleScreenState extends State<RoleScreen> {
 
               const SizedBox(height: 8),
 
-              const Text(
-                'Choisissez votre profil pour accéder '
-                    'à l\'interface adaptée à vos besoins.',
-                style: TextStyle(
+              Text(
+                t('role_sous_titre'),
+                style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                   height: 1.5,
@@ -55,11 +60,8 @@ class _RoleScreenState extends State<RoleScreen> {
 
               // Carte Patient
               _CarteRole(
-                titre: 'Patient',
-                description:
-                'Suivre mon traitement, '
-                    'gérer mes rappels et '
-                    'consulter mon historique.',
+                titre: t('patient'),
+                description: t('role_patient_desc'),
                 icone: Icons.person_outline,
                 estSelectionne: _roleChoisi == 'patient',
                 onTap: () {
@@ -71,10 +73,8 @@ class _RoleScreenState extends State<RoleScreen> {
 
               // Carte Soignant
               _CarteRole(
-                titre: 'Soignant',
-                description:
-                'Suivre l\'observance de mes patients '
-                    'et gérer les protocoles de traitement.',
+                titre: t('soignant'),
+                description: t('role_soignant_desc'),
                 icone: Icons.medical_services_outlined,
                 estSelectionne: _roleChoisi == 'soignant',
                 onTap: () {
@@ -99,11 +99,10 @@ class _RoleScreenState extends State<RoleScreen> {
                       color: AppColors.primary.withValues(alpha: 0.7),
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Votre choix détermine l\'interface '
-                            'et les données accessibles.',
-                        style: TextStyle(
+                        t('role_note'),
+                        style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
                           height: 1.4,
@@ -153,9 +152,9 @@ class _RoleScreenState extends State<RoleScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text(
-                    'Continuer',
-                    style: TextStyle(
+                  child: Text(
+                    t('continuer'),
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.3,

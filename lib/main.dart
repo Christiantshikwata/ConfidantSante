@@ -65,6 +65,8 @@ class ConfidantSanteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Écoute la langue : tout changement reconstruit l'app.
+    context.watch<LangueProvider>();
     return MaterialApp(
       title: 'ConfidantSanté',
       debugShowCheckedModeBanner: false,

@@ -1,12 +1,12 @@
 
 
 import 'package:flutter/material.dart';
-//import 'package:provider/provider.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_translations.dart';
+import '../../core/providers/langue_provider.dart';
 import '../../core/services/database_service.dart';
-//import '../../core/providers/patient_provider.dart';
 import '../../core/services/session_service.dart';
 
 class AgendaScreen extends StatefulWidget {
@@ -261,6 +261,7 @@ class _AgendaScreenState extends State<AgendaScreen>
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LangueProvider>();
     final t = AppTranslations.t;
 
     return Scaffold(
