@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/database_service.dart';
 import '../services/session_service.dart';
 import '../services/sync_service.dart';
+import '../services/notification_service.dart';
 
 // Ce provider gère toutes les données du patient connecté
 // Il est accessible depuis n'importe quel écran
@@ -19,6 +20,9 @@ class PatientProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _traitements = [];
   List<Map<String, dynamic>> _historique  = [];
 
+  // Protocoles attribués par le médecin, en attente de définition d'heure
+  List<Map<String, dynamic>> _protocoles = [];
+
   // Ids des rappels déjà pris aujourd'hui
   Set<int> _prisAujourdhui = {};
 
@@ -32,6 +36,7 @@ class PatientProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get rappels     => _rappels;
   List<Map<String, dynamic>> get traitements => _traitements;
   List<Map<String, dynamic>> get historique  => _historique;
+  List<Map<String, dynamic>> get protocolesAConfigurer => _protocoles;
   Set<int> get prisAujourdhui => _prisAujourdhui;
 
   /// Indique si un rappel a déjà été marqué pris aujourd'hui.
@@ -51,11 +56,20 @@ class PatientProvider extends ChangeNotifier {
 
     if (_patientId == null) return;
 
+    // Désactive et annule les rappels dont le protocole est terminé
+    final expires = await DatabaseService().desactiverRappelsExpires(_patientId!);
+    for (final id in expires) {
+      await NotificationService().annulerRappel(id);
+    }
+
     // Charge les rappels
     _rappels = await DatabaseService().getRappels(_patientId!);
 
     // Charge les traitements
     _traitements = await DatabaseService().getTraitements(_patientId!);
+
+    // Protocoles attribués par le médecin, en attente d'une heure
+    _protocoles = await DatabaseService().getProtocolesAConfigurer(_patientId!);
 
     // Calcule l'observance
     _observance = await DatabaseService().getTauxObservance(_patientId!);
@@ -106,6 +120,36 @@ class PatientProvider extends ChangeNotifier {
     await chargerDonnees();
   }
 
+  // Le patient fixe l'heure d'un protocole : crée le rappel quotidien et
+  // programme la notification jusqu'à la fin du protocole.
+  Future<void> definirHeureProtocole(
+    Map<String, dynamic> protocole,
+    String heure,
+  ) async {
+    if (_patientId == null) return;
+
+    final nom    = protocole['nom_medicament'] as String? ?? '';
+    final dosage = protocole['dosage'] as String? ?? '';
+
+    final rappelId = await DatabaseService().definirHeureProtocole(
+      traitementId:  protocole['id'] as int,
+      patientId:     _patientId!,
+      nomMedicament: nom,
+      dosage:        dosage,
+      heure:         heure,
+      dateFin:       protocole['date_fin'] as String?,
+    );
+
+    await NotificationService().programmerDepuisTexte(
+      id:            rappelId,
+      nomMedicament: nom,
+      dosage:        dosage,
+      heureTexte:    heure,
+    );
+
+    await chargerDonnees();
+  }
+
   // Réinitialise les données à la déconnexion
   void reinitialiser() {
     _patientId   = null;
@@ -116,6 +160,7 @@ class PatientProvider extends ChangeNotifier {
     _rappels     = [];
     _traitements = [];
     _historique  = [];
+    _protocoles  = [];
     notifyListeners();
   }
 }

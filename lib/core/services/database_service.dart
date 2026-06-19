@@ -27,7 +27,7 @@ class DatabaseService {
     return await openDatabase(
       cheminComplet,
       onCreate: _creerTables,
-      version: 5,
+      version: 6,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _creerTableRendezVous(db);
@@ -57,6 +57,13 @@ class DatabaseService {
             whereArgs: [soignantDemoMatricule],
           );
         }
+        if (oldVersion < 6) {
+          // Protocole de traitement : durée + lien rappel ↔ traitement.
+          await db.execute("ALTER TABLE traitements ADD COLUMN date_fin TEXT");
+          await db.execute("ALTER TABLE traitements ADD COLUMN duree_mois INTEGER");
+          await db.execute("ALTER TABLE rappels ADD COLUMN date_fin TEXT");
+          await db.execute("ALTER TABLE rappels ADD COLUMN traitement_id INTEGER");
+        }
       },
     );
   }
@@ -84,10 +91,12 @@ class DatabaseService {
         patient_id INTEGER NOT NULL,
         nom_medicament TEXT NOT NULL,
         dosage TEXT,
-        heure TEXT NOT NULL,
+        heure TEXT,
         jours_actifs TEXT DEFAULT 'tous',
         est_actif INTEGER DEFAULT 1,
         date_debut TEXT,
+        date_fin TEXT,
+        duree_mois INTEGER,
         FOREIGN KEY (patient_id) REFERENCES patients(id)
       )
     ''');
@@ -115,6 +124,8 @@ class DatabaseService {
         heure TEXT NOT NULL,
         est_actif INTEGER DEFAULT 1,
         date_creation TEXT,
+        date_fin TEXT,
+        traitement_id INTEGER,
         FOREIGN KEY (patient_id) REFERENCES patients(id)
       )
     ''');
@@ -580,6 +591,91 @@ class DatabaseService {
       where: 'patient_id = ? AND est_actif = 1',
       whereArgs: [patientId],
     );
+  }
+
+  // ── PROTOCOLES (médecin → patient) ─────────────────────────────────────────
+
+  /// Médecin : attribue un protocole (médicament + dosage + durée) à un patient.
+  /// L'heure reste vide : c'est le patient qui la choisira ensuite.
+  Future<int> assignerProtocole({
+    required int patientId,
+    required String nomMedicament,
+    required String dosage,
+    required int dureeMois,
+  }) async {
+    final db = await database;
+    final debut = DateTime.now();
+    // DateTime gère le débordement de mois (ex. mois 13 → année suivante).
+    final fin = DateTime(debut.year, debut.month + dureeMois, debut.day);
+    return await db.insert('traitements', {
+      'patient_id':     patientId,
+      'nom_medicament': nomMedicament,
+      'dosage':         dosage,
+      'heure':          '',
+      'date_debut':     debut.toIso8601String(),
+      'date_fin':       fin.toIso8601String(),
+      'duree_mois':     dureeMois,
+      'est_actif':      1,
+    });
+  }
+
+  /// Patient : protocoles attribués dont l'heure n'est pas encore définie.
+  Future<List<Map<String, dynamic>>> getProtocolesAConfigurer(
+      int patientId) async {
+    final db = await database;
+    return await db.query(
+      'traitements',
+      where: "patient_id = ? AND est_actif = 1 AND (heure IS NULL OR heure = '')",
+      whereArgs: [patientId],
+      orderBy: 'date_debut DESC',
+    );
+  }
+
+  /// Patient : fixe l'heure d'un protocole et crée le rappel quotidien associé
+  /// (valable jusqu'à la date de fin du protocole). Retourne l'id du rappel.
+  Future<int> definirHeureProtocole({
+    required int traitementId,
+    required int patientId,
+    required String nomMedicament,
+    required String dosage,
+    required String heure,
+    String? dateFin,
+  }) async {
+    final db = await database;
+    await db.update(
+      'traitements',
+      {'heure': heure},
+      where: 'id = ?',
+      whereArgs: [traitementId],
+    );
+    return await db.insert('rappels', {
+      'patient_id':     patientId,
+      'nom_medicament': nomMedicament,
+      'dosage':         dosage,
+      'heure':          heure,
+      'est_actif':      1,
+      'date_creation':  DateTime.now().toIso8601String(),
+      'date_fin':       dateFin,
+      'traitement_id':  traitementId,
+    });
+  }
+
+  /// Désactive les rappels dont la date de fin est dépassée.
+  /// Retourne les ids désactivés (pour annuler leurs notifications).
+  Future<List<int>> desactiverRappelsExpires(int patientId) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    final expires = await db.query(
+      'rappels',
+      where:
+          "patient_id = ? AND est_actif = 1 AND date_fin IS NOT NULL AND date_fin < ?",
+      whereArgs: [patientId, now],
+    );
+    for (final r in expires) {
+      await db.update('rappels', {'est_actif': 0},
+          where: 'id = ?', whereArgs: [r['id']]);
+    }
+    return expires.map((r) => r['id'] as int).toList();
   }
 
   // Ferme la base de données

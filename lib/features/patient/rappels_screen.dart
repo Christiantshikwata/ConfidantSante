@@ -29,15 +29,6 @@ class _RappelsScreenState extends State<RappelsScreen>
     super.dispose();
   }
 
-  void _ajouterRappel() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const _FormulaireAjoutRappel(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Consumer<PatientProvider>(
@@ -64,34 +55,18 @@ class _RappelsScreenState extends State<RappelsScreen>
                   child: Column(
                     children: [
 
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Rappels',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Rappels',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
                             ),
-                            GestureDetector(
-                              onTap: _ajouterRappel,
-                              child: Container(
-                                width: 38, height: 38,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(
-                                  Icons.add,
-                                  color: Colors.white, size: 22,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
 
@@ -154,7 +129,10 @@ class _RappelsScreenState extends State<RappelsScreen>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    _OngletAujourdhui(rappels: rappels),
+                    _OngletAujourdhui(
+                      rappels: rappels,
+                      protocoles: patient.protocolesAConfigurer,
+                    ),
                     const _OngletSemaine(),
                     _OngletHistorique(historique: patient.historique),
                   ],
@@ -221,12 +199,16 @@ class _StatRapide extends StatelessWidget {
 
 class _OngletAujourdhui extends StatelessWidget {
   final List<Map<String, dynamic>> rappels;
+  final List<Map<String, dynamic>> protocoles;
 
-  const _OngletAujourdhui({required this.rappels});
+  const _OngletAujourdhui({
+    required this.rappels,
+    required this.protocoles,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (rappels.isEmpty) {
+    if (rappels.isEmpty && protocoles.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -238,7 +220,7 @@ class _OngletAujourdhui extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Aucun médicament configuré',
+              'Aucun traitement pour le moment',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -246,11 +228,15 @@ class _OngletAujourdhui extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Tapez sur + pour ajouter vos médicaments',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                'Votre médecin vous attribuera un traitement.\nIl apparaîtra ici.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ],
@@ -268,6 +254,28 @@ class _OngletAujourdhui extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+
+        // Protocoles attribués par le médecin, en attente d'une heure
+        if (protocoles.isNotEmpty) ...[
+          Row(
+            children: [
+              const Icon(Icons.assignment_outlined,
+                  size: 16, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                'À configurer (${protocoles.length})',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...protocoles.map((p) => _CarteProtocole(protocole: p)),
+          const SizedBox(height: 20),
+        ],
 
         // Badge offline
         Container(
@@ -360,6 +368,113 @@ class _OngletAujourdhui extends StatelessWidget {
         }),
 
       ],
+    );
+  }
+}
+
+// ── CARTE PROTOCOLE (à configurer par le patient) ───────────────────────────
+
+class _CarteProtocole extends StatelessWidget {
+  final Map<String, dynamic> protocole;
+
+  const _CarteProtocole({required this.protocole});
+
+  Future<void> _definirHeure(BuildContext context) async {
+    final heureChoisie = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 8, minute: 0),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+        ),
+        child: child!,
+      ),
+    );
+    if (heureChoisie == null) return;
+
+    final heure =
+        '${heureChoisie.hour.toString().padLeft(2, '0')}h${heureChoisie.minute.toString().padLeft(2, '0')}';
+
+    if (!context.mounted) return;
+    await context
+        .read<PatientProvider>()
+        .definirHeureProtocole(protocole, heure);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Rappel programmé à $heure pour ${protocole['nom_medicament']}',
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mois = protocole['duree_mois'];
+    final dureeTexte = mois != null ? '$mois mois' : '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primaryPale,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.assignment_turned_in_outlined,
+                color: AppColors.primary, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  protocole['nom_medicament'] as String? ?? '',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${protocole['dosage'] ?? ''}${dureeTexte.isNotEmpty ? ' • $dureeTexte' : ''}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => _definirHeure(context),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            child: const Text(
+              'Définir l\'heure',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

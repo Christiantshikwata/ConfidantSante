@@ -1014,6 +1014,185 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
     });
   }
 
+  // Médecin : attribue un protocole (médicament + dosage + durée) au patient.
+  Future<void> _ajouterProtocole() async {
+    final patientId = widget.patient['id'] as int;
+    final nomCtrl = TextEditingController();
+    final dosageCtrl = TextEditingController();
+    int dureeMois = 1;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModal) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            left: 24, right: 24, top: 8,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0E7EF),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Text('Attribuer un protocole',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+                const Text('Le patient choisira lui-même l\'heure de prise.',
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary)),
+                const SizedBox(height: 20),
+
+                const Text('Médicament',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: nomCtrl,
+                  decoration: _decoProto('Ex. : Tenofovir/Lamivudine'),
+                ),
+                const SizedBox(height: 14),
+
+                const Text('Dosage',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: dosageCtrl,
+                  decoration: _decoProto('Ex. : 300mg — 1 comprimé'),
+                ),
+                const SizedBox(height: 14),
+
+                const Text('Durée du protocole',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [1, 3, 6].map((m) {
+                    final actif = dureeMois == m;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => setModal(() => dureeMois = m),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: actif
+                                ? const Color(0xFF0288D1)
+                                : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Text('$m mois',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: actif
+                                      ? Colors.white
+                                      : AppColors.textSecondary,
+                                )),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (nomCtrl.text.trim().isEmpty) return;
+                      await DatabaseService().assignerProtocole(
+                        patientId: patientId,
+                        nomMedicament: nomCtrl.text.trim(),
+                        dosage: dosageCtrl.text.trim().isEmpty
+                            ? '1 comprimé'
+                            : dosageCtrl.text.trim(),
+                        dureeMois: dureeMois,
+                      );
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0288D1),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('Attribuer',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (mounted) {
+      _charger();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Protocole attribué au patient'),
+          backgroundColor: Color(0xFF0288D1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  InputDecoration _decoProto(String hint) => InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Color(0xFFB0BEC5), fontSize: 14),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFF),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE0E7EF)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE0E7EF)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF0288D1), width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      );
+
   Color get _couleur {
     final obs = widget.patient['observance'] as double? ?? 0;
     if (obs >= 90) return AppColors.success;
@@ -1304,15 +1483,8 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Modifier le protocole'),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        onPressed: _ajouterProtocole,
+                        icon: const Icon(Icons.add_outlined, size: 18),
                         label: const Text('Protocole'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF0288D1),
