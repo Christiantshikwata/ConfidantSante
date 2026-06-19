@@ -27,7 +27,7 @@ class DatabaseService {
     return await openDatabase(
       cheminComplet,
       onCreate: _creerTables,
-      version: 6,
+      version: 7,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _creerTableRendezVous(db);
@@ -64,6 +64,10 @@ class DatabaseService {
           await db.execute("ALTER TABLE rappels ADD COLUMN date_fin TEXT");
           await db.execute("ALTER TABLE rappels ADD COLUMN traitement_id INTEGER");
         }
+        if (oldVersion < 7) {
+          // Identifiant Firestore pour dédupliquer les protocoles synchronisés.
+          await db.execute("ALTER TABLE traitements ADD COLUMN remote_id TEXT");
+        }
       },
     );
   }
@@ -97,6 +101,7 @@ class DatabaseService {
         date_debut TEXT,
         date_fin TEXT,
         duree_mois INTEGER,
+        remote_id TEXT,
         FOREIGN KEY (patient_id) REFERENCES patients(id)
       )
     ''');
@@ -616,6 +621,47 @@ class DatabaseService {
       'date_fin':       fin.toIso8601String(),
       'duree_mois':     dureeMois,
       'est_actif':      1,
+    });
+  }
+
+  /// Récupère un traitement par son id.
+  Future<Map<String, dynamic>?> getTraitementParId(int id) async {
+    final db = await database;
+    final r = await db.query('traitements',
+        where: 'id = ?', whereArgs: [id], limit: 1);
+    return r.isNotEmpty ? r.first : null;
+  }
+
+  /// Insère un protocole reçu de Firestore s'il n'existe pas déjà localement
+  /// (déduplication par remote_id). Ne touche pas à un protocole déjà présent
+  /// (donc préserve l'heure éventuellement choisie par le patient).
+  Future<void> upsertProtocoleDepuisFirestore({
+    required int patientId,
+    required String remoteId,
+    required String nomMedicament,
+    required String dosage,
+    String? dateDebut,
+    String? dateFin,
+    int? dureeMois,
+  }) async {
+    final db = await database;
+    final existant = await db.query(
+      'traitements',
+      where: 'patient_id = ? AND remote_id = ?',
+      whereArgs: [patientId, remoteId],
+      limit: 1,
+    );
+    if (existant.isNotEmpty) return;
+    await db.insert('traitements', {
+      'patient_id':     patientId,
+      'nom_medicament': nomMedicament,
+      'dosage':         dosage,
+      'heure':          '',
+      'date_debut':     dateDebut,
+      'date_fin':       dateFin,
+      'duree_mois':     dureeMois,
+      'est_actif':      1,
+      'remote_id':      remoteId,
     });
   }
 

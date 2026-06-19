@@ -230,6 +230,65 @@ class SyncService {
     });
   }
 
+  // ── Protocoles (médecin → patient) ─────────────────────────────────────────
+
+  /// Médecin : pousse un protocole vers Firestore (sous le numéro du patient).
+  Future<void> pousserProtocole({
+    required String numero,
+    required String idLocal,
+    required String nomMedicament,
+    required String dosage,
+    String? dateDebut,
+    String? dateFin,
+    int? dureeMois,
+  }) async {
+    if (!firebaseDisponible) return;
+    try {
+      await _firestore
+          .collection('patients')
+          .doc(numero)
+          .collection('traitements')
+          .doc(idLocal)
+          .set({
+        'nom_medicament': nomMedicament,
+        'dosage':         dosage,
+        'date_debut':     dateDebut,
+        'date_fin':       dateFin,
+        'duree_mois':     dureeMois,
+        'created_at':     FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pousserProtocole : $e');
+    }
+  }
+
+  /// Patient : récupère les protocoles attribués depuis Firestore et les
+  /// enregistre localement (sans doublon).
+  Future<void> pullProtocoles(String numero, int patientId) async {
+    if (!firebaseDisponible) return;
+    try {
+      final snap = await _firestore
+          .collection('patients')
+          .doc(numero)
+          .collection('traitements')
+          .get();
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        await DatabaseService().upsertProtocoleDepuisFirestore(
+          patientId:     patientId,
+          remoteId:      doc.id,
+          nomMedicament: d['nom_medicament'] as String? ?? '',
+          dosage:        d['dosage'] as String? ?? '',
+          dateDebut:     d['date_debut'] as String?,
+          dateFin:       d['date_fin'] as String?,
+          dureeMois:     d['duree_mois'] as int?,
+        );
+      }
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pullProtocoles : $e');
+    }
+  }
+
   // ── Observance depuis Firestore (pour le soignant), par numéro patient ─────
   Future<double?> getObservanceFirestore(String numero) async {
     if (!firebaseDisponible) return null;

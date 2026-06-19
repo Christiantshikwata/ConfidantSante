@@ -68,6 +68,11 @@ class PatientProvider extends ChangeNotifier {
     // Charge les traitements
     _traitements = await DatabaseService().getTraitements(_patientId!);
 
+    // Récupère les protocoles attribués par le médecin (Firestore → local)
+    if (_numero.isNotEmpty) {
+      await SyncService().pullProtocoles(_numero, _patientId!);
+    }
+
     // Protocoles attribués par le médecin, en attente d'une heure
     _protocoles = await DatabaseService().getProtocolesAConfigurer(_patientId!);
 

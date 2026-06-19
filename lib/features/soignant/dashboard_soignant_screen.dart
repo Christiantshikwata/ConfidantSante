@@ -1129,7 +1129,8 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                   child: ElevatedButton(
                     onPressed: () async {
                       if (nomCtrl.text.trim().isEmpty) return;
-                      await DatabaseService().assignerProtocole(
+                      final idLocal =
+                          await DatabaseService().assignerProtocole(
                         patientId: patientId,
                         nomMedicament: nomCtrl.text.trim(),
                         dosage: dosageCtrl.text.trim().isEmpty
@@ -1137,6 +1138,22 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                             : dosageCtrl.text.trim(),
                         dureeMois: dureeMois,
                       );
+                      // Synchronise vers Firestore (cross-appareils), best-effort.
+                      final row =
+                          await DatabaseService().getTraitementParId(idLocal);
+                      final numero =
+                          widget.patient['numero'] as String? ?? '';
+                      if (row != null && numero.isNotEmpty) {
+                        await SyncService().pousserProtocole(
+                          numero:        numero,
+                          idLocal:       idLocal.toString(),
+                          nomMedicament: row['nom_medicament'] as String? ?? '',
+                          dosage:        row['dosage'] as String? ?? '',
+                          dateDebut:     row['date_debut'] as String?,
+                          dateFin:       row['date_fin'] as String?,
+                          dureeMois:     row['duree_mois'] as int?,
+                        );
+                      }
                       if (!ctx.mounted) return;
                       Navigator.pop(ctx);
                     },
