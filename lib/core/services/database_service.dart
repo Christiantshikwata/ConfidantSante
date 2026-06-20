@@ -27,7 +27,7 @@ class DatabaseService {
     return await openDatabase(
       cheminComplet,
       onCreate: _creerTables,
-      version: 7,
+      version: 8,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _creerTableRendezVous(db);
@@ -68,6 +68,11 @@ class DatabaseService {
           // Identifiant Firestore pour dédupliquer les protocoles synchronisés.
           await db.execute("ALTER TABLE traitements ADD COLUMN remote_id TEXT");
         }
+        if (oldVersion < 8) {
+          // Rattachement d'un patient à son médecin référent (matricule).
+          await db.execute(
+              "ALTER TABLE patients ADD COLUMN soignant_matricule TEXT");
+        }
       },
     );
   }
@@ -83,6 +88,7 @@ class DatabaseService {
         numero TEXT NOT NULL UNIQUE,
         mot_de_passe TEXT NOT NULL,
         soignant TEXT,
+        soignant_matricule TEXT,
         hopital TEXT,
         date_creation TEXT
       )
@@ -530,29 +536,88 @@ class DatabaseService {
     return await db.query('patients', orderBy: 'nom ASC');
   }
 
-  /// Crée un patient depuis le dashboard soignant (mot de passe haché)
+  /// Crée un patient depuis le dashboard soignant (mot de passe haché),
+  /// rattaché au médecin référent (matricule).
   Future<int> creerPatientParSoignant({
     required String nom,
     required String numero,
     required String motDePasse,
     String? soignant,
+    String? soignantMatricule,
     String? hopital,
   }) async {
     final db = await database;
     return await db.insert(
       'patients',
       {
-        'nom':          nom,
-        'numero':       numero,
-        'mot_de_passe': PasswordService.hash(
+        'nom':                nom,
+        'numero':             numero,
+        'mot_de_passe':       PasswordService.hash(
           identifiant: numero,
           motDePasse: motDePasse,
         ),
-        'soignant':     soignant ?? 'Dr. Yves Ndetereyuwe',
-        'hopital':      hopital ?? 'Centre Hospitalier Congo-Chine',
+        'soignant':           soignant ?? 'Dr. Yves Ndetereyuwe',
+        'soignant_matricule': soignantMatricule,
+        'hopital':            hopital ?? 'Centre Hospitalier Congo-Chine',
+        'date_creation':      DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  // ── GESTION DES MÉDECINS (admin) ───────────────────────────────────────────
+
+  /// Le médecin de démonstration fait office d'administrateur.
+  bool estAdmin(String? matricule) => matricule == soignantDemoMatricule;
+
+  /// Crée un nouveau médecin (mot de passe haché, salé par matricule).
+  Future<int> creerSoignant({
+    required String nom,
+    required String matricule,
+    required String motDePasse,
+    String? specialite,
+  }) async {
+    final db = await database;
+    return await db.insert(
+      'soignants',
+      {
+        'nom':           nom,
+        'matricule':     matricule,
+        'mot_de_passe':  PasswordService.hash(
+          identifiant: matricule,
+          motDePasse: motDePasse,
+        ),
+        'specialite':    specialite ?? 'Médecin',
+        'service':       'VIH/SIDA',
         'date_creation': DateTime.now().toIso8601String(),
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Liste de tous les médecins.
+  Future<List<Map<String, dynamic>>> getTousSoignants() async {
+    final db = await database;
+    return await db.query('soignants', orderBy: 'nom ASC');
+  }
+
+  /// Vérifie si un matricule de médecin existe déjà.
+  Future<bool> matriculeExiste(String matricule) async {
+    final db = await database;
+    final res = await db.query('soignants',
+        where: 'matricule = ?', whereArgs: [matricule], limit: 1);
+    return res.isNotEmpty;
+  }
+
+  /// Patients rattachés à un médecin précis.
+  Future<List<Map<String, dynamic>>> getPatientsParSoignant(
+      String matricule) async {
+    final db = await database;
+    return await db.query(
+      'patients',
+      where: 'soignant_matricule = ?',
+      whereArgs: [matricule],
+      orderBy: 'nom ASC',
     );
   }
 

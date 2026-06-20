@@ -8,6 +8,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/sync_service.dart';
 import '../../core/services/password_service.dart';
+import '../../core/services/session_service.dart';
 
 class AjouterPatientScreen extends StatefulWidget {
   const AjouterPatientScreen({super.key});
@@ -62,12 +63,17 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
       final numero = _numeroCtrl.text.trim();
       final pwd    = _mdpCtrl.text;
 
+      // Rattache le patient au médecin connecté.
+      final matricule = await SessionService().getSoignantMatricule();
+      final nomSoignant = await SessionService().getSoignantNom();
+
       final id = await DatabaseService().creerPatientParSoignant(
-        nom:        nom,
-        numero:     numero,
-        motDePasse: pwd,
-        soignant:   'Dr. Yves Ndetereyuwe',
-        hopital:    'Centre Hospitalier Congo-Chine',
+        nom:               nom,
+        numero:            numero,
+        motDePasse:        pwd,
+        soignant:          nomSoignant ?? 'Dr. Yves Ndetereyuwe',
+        soignantMatricule: matricule,
+        hopital:           'Centre Hospitalier Congo-Chine',
       );
 
       if (id > 0) {

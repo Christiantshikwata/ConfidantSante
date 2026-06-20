@@ -6,6 +6,7 @@ import '../../core/services/session_service.dart';
 import '../../core/services/sync_service.dart';
 import '../messagerie/messagerie_screen.dart';
 import 'ajouter_patient_screen.dart';
+import 'gerer_medecins_screen.dart';
 
 class DashboardSoignantScreen extends StatefulWidget {
   const DashboardSoignantScreen({super.key});
@@ -19,6 +20,7 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
 
   int _pageActive = 0;
   String _nomSoignant = 'Dr.';
+  bool _estAdmin = false;
   List<Map<String, dynamic>> _patients = [];
   bool _isLoading = true;
 
@@ -32,7 +34,13 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
     setState(() => _isLoading = true);
     try {
       final nom = await SessionService().getSoignantNom();
-      final patients = await DatabaseService().getTousPatients();
+      final matricule = await SessionService().getSoignantMatricule() ?? '';
+      final admin = DatabaseService().estAdmin(matricule);
+
+      // L'admin voit tous les patients ; un médecin ne voit que les siens.
+      final patients = admin
+          ? await DatabaseService().getTousPatients()
+          : await DatabaseService().getPatientsParSoignant(matricule);
 
       // Pour chaque patient, calcule son observance.
       // Source prioritaire : Firestore (données remontées par l'appareil du
@@ -51,11 +59,20 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
 
       setState(() {
         _nomSoignant = nom ?? 'Dr. Ndetereyuwe';
+        _estAdmin = admin;
         _patients = patientsAvecObservance;
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _ouvrirGestionMedecins() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const GererMedecinsScreen()),
+    );
+    _chargerDonnees();
   }
 
   @override
@@ -67,7 +84,9 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
         nomSoignant: _nomSoignant,
         patients: _patients,
         isLoading: _isLoading,
+        estAdmin: _estAdmin,
         onRefresh: _chargerDonnees,
+        onGererMedecins: _ouvrirGestionMedecins,
       )
           : _PagePatients(
         patients: _patients,
@@ -127,13 +146,17 @@ class _PageAccueil extends StatelessWidget {
   final String nomSoignant;
   final List<Map<String, dynamic>> patients;
   final bool isLoading;
+  final bool estAdmin;
   final VoidCallback onRefresh;
+  final VoidCallback onGererMedecins;
 
   const _PageAccueil({
     required this.nomSoignant,
     required this.patients,
     required this.isLoading,
+    required this.estAdmin,
     required this.onRefresh,
+    required this.onGererMedecins,
   });
 
   static String _salutation() {
@@ -336,6 +359,33 @@ class _PageAccueil extends StatelessWidget {
                       ),
                     ),
                   ),
+
+                  // Bouton admin : gérer les médecins
+                  if (estAdmin) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        onPressed: onGererMedecins,
+                        icon: const Icon(Icons.manage_accounts_outlined,
+                            size: 20),
+                        label: const Text(
+                          'Gérer les médecins',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF0288D1),
+                          side: const BorderSide(
+                              color: Color(0xFF0288D1), width: 1.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
 
                   const SizedBox(height: 20),
 
