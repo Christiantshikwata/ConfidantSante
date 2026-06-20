@@ -761,6 +761,81 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
     }
   }
 
+  // PIN oublié : le patient saisit le mot de passe de son compte pour
+  // définir un nouveau PIN.
+  Future<void> _reinitialiserPin() async {
+    final ctrl = TextEditingController();
+    String? erreur;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          title: Text(AppTranslations.t('reinit_pin_titre')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                AppTranslations.t('reinit_pin_desc'),
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: AppTranslations.t('mot_de_passe'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              if (erreur != null) ...[
+                const SizedBox(height: 8),
+                Text(erreur!,
+                    style: const TextStyle(
+                        color: AppColors.danger, fontSize: 12)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(AppTranslations.t('annuler')),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final numero = await SessionService().getNumero();
+                if (numero == null) {
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  return;
+                }
+                final patient = await DatabaseService().connecterPatient(
+                  numero: numero,
+                  motDePasse: ctrl.text,
+                );
+                if (patient != null) {
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PinScreen()),
+                    );
+                  }
+                } else {
+                  setDlg(() => erreur = AppTranslations.t('mdp_incorrect'));
+                }
+              },
+              child: Text(AppTranslations.t('valider')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     context.watch<LangueProvider>();
@@ -940,7 +1015,7 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
 
             // Lien "Code oublié"
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: _reinitialiserPin,
               child: Text(
                 t('code_oublie'),
                 style: TextStyle(

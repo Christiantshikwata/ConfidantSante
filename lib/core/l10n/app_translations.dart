@@ -159,6 +159,10 @@ class AppTranslations {
       'observance_court':  'Observance',
       'prises_label':      'prises',
       'historique_vide_desc':'Confirmez vos prises pour voir l\'historique',
+      'reinit_pin_titre':  'Réinitialiser le PIN',
+      'reinit_pin_desc':   'Entrez le mot de passe de votre compte pour définir un nouveau PIN.',
+      'mdp_incorrect':     'Mot de passe incorrect.',
+      'valider':           'Valider',
     },
 
     // ── ENGLISH ──────────────────────────────────────────────────
@@ -306,6 +310,10 @@ class AppTranslations {
       'observance_court':  'Adherence',
       'prises_label':      'doses',
       'historique_vide_desc':'Confirm your doses to see history',
+      'reinit_pin_titre':  'Reset PIN',
+      'reinit_pin_desc':   'Enter your account password to set a new PIN.',
+      'mdp_incorrect':     'Incorrect password.',
+      'valider':           'Confirm',
     },
 
     // ── KISWAHILI ────────────────────────────────────────────────
@@ -453,6 +461,10 @@ class AppTranslations {
       'observance_court':  'Uzingativu',
       'prises_label':      'dozi',
       'historique_vide_desc':'Thibitisha dozi zako kuona historia',
+      'reinit_pin_titre':  'Weka upya PIN',
+      'reinit_pin_desc':   'Ingiza nenosiri la akaunti yako ili kuweka PIN mpya.',
+      'mdp_incorrect':     'Nenosiri si sahihi.',
+      'valider':           'Thibitisha',
     },
   };
 
