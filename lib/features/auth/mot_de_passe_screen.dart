@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
+import '../../core/providers/langue_provider.dart';
 import '../patient/dashboard_patient_screen.dart';
 import '../../core/services/session_service.dart';
 class MotDePasseScreen extends StatefulWidget {
@@ -451,6 +454,8 @@ class _PinScreenState extends State<PinScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LangueProvider>();
+    final t = AppTranslations.t;
     final pinActuel = _enConfirmation ? _pinConfirm : _pin;
 
     return Scaffold(
@@ -512,8 +517,8 @@ class _PinScreenState extends State<PinScreen> {
             // Titre
             Text(
               _enConfirmation
-                  ? 'Confirmez votre PIN'
-                  : 'Créez votre PIN',
+                  ? t('confirmer_pin')
+                  : t('creer_pin'),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
@@ -525,8 +530,8 @@ class _PinScreenState extends State<PinScreen> {
 
             Text(
               _enConfirmation
-                  ? 'Entrez à nouveau vos 4 chiffres'
-                  : 'Ce code déverrouille l\'app sans internet',
+                  ? t('pin_confirmer_desc')
+                  : t('pin_creer_desc'),
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 14,
@@ -548,10 +553,10 @@ class _PinScreenState extends State<PinScreen> {
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'Les codes ne correspondent pas. Réessayez.',
+                child: Text(
+                  t('pin_non_correspond'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13,
                   ),

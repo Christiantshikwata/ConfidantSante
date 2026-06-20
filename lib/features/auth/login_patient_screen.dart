@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
+import '../../core/providers/langue_provider.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
 import '../../core/services/sync_service.dart';
@@ -52,7 +55,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
     if (existe) {
       setState(() {
         _enChargement = false;
-        _erreur = 'Ce numéro est déjà enregistré. Connectez-vous.';
+        _erreur = AppTranslations.t('erreur_existe');
       });
       return;
     }
@@ -86,7 +89,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
     } else {
       setState(() {
         _enChargement = false;
-        _erreur = 'Erreur lors de la création du compte.';
+        _erreur = AppTranslations.t('erreur_creation');
       });
     }
   }
@@ -158,13 +161,15 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
     } else {
       setState(() {
         _enChargement = false;
-        _erreur = 'Numéro ou mot de passe incorrect.';
+        _erreur = AppTranslations.t('erreur_login');
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LangueProvider>();
+    final t = AppTranslations.t;
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       body: Column(
@@ -221,8 +226,8 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
                     Text(
                       _premiereVisite
-                          ? 'Créer un compte'
-                          : 'Connexion Patient',
+                          ? t('creer_un_compte')
+                          : t('connexion_patient'),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -234,10 +239,8 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
                     Text(
                       _premiereVisite
-                          ? 'Créez votre compte pour commencer\n'
-                          'à suivre votre traitement.'
-                          : 'Connectez-vous pour accéder\n'
-                          'à votre espace personnel.',
+                          ? t('sous_titre_inscription')
+                          : t('sous_titre_connexion'),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 14,
@@ -272,7 +275,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                       child: Row(
                         children: [
                           _toggleBtn(
-                            'Nouveau compte',
+                            t('nouveau_compte'),
                             _premiereVisite,
                                 () => setState(() {
                               _premiereVisite = true;
@@ -280,7 +283,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                             }),
                           ),
                           _toggleBtn(
-                            'Se connecter',
+                            t('se_connecter'),
                             !_premiereVisite,
                                 () => setState(() {
                               _premiereVisite = false;
@@ -295,16 +298,16 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
                     // Champ nom (inscription seulement)
                     if (_premiereVisite) ...[
-                      _labelChamp('Votre nom complet'),
+                      _labelChamp(t('nom_complet')),
                       const SizedBox(height: 8),
                       _champTexte(
                         controller: _nomController,
-                        hint: 'Ex : Christian Ngoy',
+                        hint: t('hint_nom'),
                         icone: Icons.person_outline,
                         validator: (v) {
                           if (_premiereVisite &&
                               (v == null || v.isEmpty)) {
-                            return 'Veuillez entrer votre nom';
+                            return t('erreur_nom');
                           }
                           return null;
                         },
@@ -313,7 +316,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                     ],
 
                     // Champ numéro
-                    _labelChamp('Numéro de téléphone'),
+                    _labelChamp(t('numero_telephone')),
                     const SizedBox(height: 8),
 
                     TextFormField(
@@ -386,10 +389,10 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                       ),
                       validator: (v) {
                         if (v == null || v.isEmpty) {
-                          return 'Veuillez entrer votre numéro';
+                          return t('erreur_numero');
                         }
                         if (v.length < 9) {
-                          return 'Le numéro doit contenir 9 chiffres';
+                          return t('erreur_numero_court');
                         }
                         return null;
                       },
@@ -400,8 +403,8 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                     // Champ mot de passe
                     _labelChamp(
                       _premiereVisite
-                          ? 'Créez un mot de passe'
-                          : 'Mot de passe',
+                          ? t('creer_mot_de_passe')
+                          : t('mot_de_passe'),
                     ),
                     const SizedBox(height: 8),
 
@@ -414,8 +417,8 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                       ),
                       decoration: InputDecoration(
                         hintText: _premiereVisite
-                            ? 'Minimum 6 caractères'
-                            : 'Votre mot de passe',
+                            ? t('hint_mdp_creer')
+                            : t('hint_mdp'),
                         hintStyle: const TextStyle(
                           color: Color(0xFFB0BEC5),
                           fontSize: 14,
@@ -470,10 +473,10 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                       ),
                       validator: (v) {
                         if (v == null || v.isEmpty) {
-                          return 'Veuillez entrer un mot de passe';
+                          return t('erreur_mdp_vide');
                         }
                         if (v.length < 6) {
-                          return 'Minimum 6 caractères';
+                          return t('erreur_mdp');
                         }
                         return null;
                       },
@@ -541,8 +544,8 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                         )
                             : Text(
                           _premiereVisite
-                              ? 'Créer mon compte'
-                              : 'Se connecter',
+                              ? t('creer_compte')
+                              : t('se_connecter'),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -696,8 +699,8 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
 
   Future<void> _authentifierBiometrie() async {
     final raison = _typeBiometrie == 'face'
-        ? 'Utilisez Face ID pour accéder à ConfidantSanté'
-        : 'Utilisez votre empreinte pour accéder à ConfidantSanté';
+        ? AppTranslations.t('face_id_raison')
+        : AppTranslations.t('empreinte_raison');
 
     final ok = await BiometricService().authentifier(raison: raison);
     if (!mounted) return;
@@ -760,6 +763,8 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LangueProvider>();
+    final t = AppTranslations.t;
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: SafeArea(
@@ -800,9 +805,9 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
 
             const SizedBox(height: 20),
 
-            const Text(
-              'Entrez votre PIN',
-              style: TextStyle(
+            Text(
+              t('entrer_pin'),
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
@@ -812,7 +817,7 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
             const SizedBox(height: 8),
 
             Text(
-              'Votre code à 4 chiffres',
+              t('pin_sous_titre'),
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 14,
@@ -835,8 +840,8 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
                 ),
                 child: Text(
                   _tentatives >= _maxTentatives - 1
-                      ? 'Trop de tentatives. Reconnectez-vous.'
-                      : 'PIN incorrect. Réessayez.',
+                      ? t('pin_trop_tentatives')
+                      : t('pin_incorrect'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                 ),
@@ -937,7 +942,7 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(
-                'Code oublié ? Se reconnecter',
+                t('code_oublie'),
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 13,
