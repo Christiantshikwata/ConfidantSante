@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "cd.udbl.fsi.confidantsante"
-    compileSdk = flutter.compileSdkVersion
+    // firebase_auth et ses dépendances androidx exigent compileSdk ≥ 34.
+    compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
