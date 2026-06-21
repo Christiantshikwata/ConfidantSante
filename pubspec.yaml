@@ -12,9 +12,10 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # Firebase — seulement Core et Firestore
+  # Firebase — Core, Firestore et Authentification
   firebase_core: ^2.24.2
   cloud_firestore: ^4.13.6
+  firebase_auth: ^4.16.0
 
   # Base de données locale offline
   sqflite: ^2.3.0

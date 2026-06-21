@@ -3,9 +3,10 @@
 
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/sync_service.dart';
-import '../../core/services/password_service.dart';
+import '../../core/services/auth_service.dart';
 
 class GererMedecinsScreen extends StatefulWidget {
   const GererMedecinsScreen({super.key});
@@ -133,19 +134,32 @@ class _GererMedecinsScreenState extends State<GererMedecinsScreen> {
                       final spec = specialiteCtrl.text.trim().isEmpty
                           ? 'Médecin'
                           : specialiteCtrl.text.trim();
+                      // Crée le compte Firebase Auth du médecin via une app
+                      // secondaire (l'admin reste connecté). Le médecin pourra
+                      // se connecter sur son propre téléphone.
+                      final res =
+                          await AuthService().creerUtilisateurSecondaire(
+                        email: AuthService.emailSoignant(matricule),
+                        motDePasse: mdp,
+                        role: 'soignant',
+                        matricule: matricule,
+                      );
+                      if (!res.succes) {
+                        setModal(() => erreur = AppTranslations.t(
+                            res.messageCle ?? 'auth_err_generique'));
+                        return;
+                      }
                       await DatabaseService().creerSoignant(
                         nom: nom,
                         matricule: matricule,
                         motDePasse: mdp,
                         specialite: spec,
                       );
-                      // Pousse le compte vers Firestore → connexion possible
-                      // sur le propre téléphone du médecin.
+                      // Pousse le profil vers Firestore (sans mot de passe).
                       await SyncService().pousserCompteSoignant(
                         matricule: matricule,
                         nom: nom,
-                        hashMotDePasse: PasswordService.hash(
-                            identifiant: matricule, motDePasse: mdp),
+                        uid: res.uid,
                         specialite: spec,
                       );
                       if (ctx.mounted) Navigator.pop(ctx);

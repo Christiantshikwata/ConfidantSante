@@ -5,9 +5,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/l10n/app_translations.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/sync_service.dart';
-import '../../core/services/password_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/session_service.dart';
 
 class AjouterPatientScreen extends StatefulWidget {
@@ -67,6 +68,21 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
       final matricule = await SessionService().getSoignantMatricule();
       final nomSoignant = await SessionService().getSoignantNom();
 
+      // Crée le compte Firebase Auth du patient via une app secondaire :
+      // le médecin reste connecté. Le patient se connectera ensuite sur son
+      // propre téléphone avec son numéro + ce mot de passe initial.
+      final res = await AuthService().creerUtilisateurSecondaire(
+        email:      AuthService.emailPatient(numero),
+        motDePasse: pwd,
+        role:       'patient',
+        numero:     numero,
+      );
+      if (!res.succes) {
+        setState(() => _erreur =
+            AppTranslations.t(res.messageCle ?? 'auth_err_generique'));
+        return;
+      }
+
       final id = await DatabaseService().creerPatientParSoignant(
         nom:               nom,
         numero:            numero,
@@ -77,13 +93,11 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
       );
 
       if (id > 0) {
-        // Pousse le compte vers Firestore → le patient peut se connecter
-        // sur son propre téléphone (même numéro + mot de passe).
+        // Pousse le profil patient vers Firestore (sans mot de passe).
         await SyncService().pousserComptePatient(
           numero:            numero,
           nom:               nom,
-          hashMotDePasse:
-              PasswordService.hash(identifiant: numero, motDePasse: pwd),
+          uid:               res.uid,
           soignant:          nomSoignant ?? 'Dr. Yves Ndetereyuwe',
           soignantMatricule: matricule,
           hopital:           'Centre Hospitalier Congo-Chine',

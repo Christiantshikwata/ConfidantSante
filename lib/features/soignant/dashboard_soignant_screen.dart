@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/sync_service.dart';
 import '../../core/services/report_service.dart';
 import '../messagerie/messagerie_screen.dart';
@@ -107,6 +108,7 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
       ),
     );
     if (ok != true) return;
+    await AuthService().deconnecter();
     await SessionService().deconnecter();
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil('/role', (route) => false);

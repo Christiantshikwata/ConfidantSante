@@ -1,0 +1,77 @@
+rules_version = '2';
+
+// ConfidantSanté — Règles de sécurité Firestore (basées sur Firebase Auth)
+//
+// Modèle :
+//  - Chaque compte Firebase Auth possède un document users/{uid} indiquant son
+//    rôle ('patient' | 'soignant' | 'admin') et son identifiant métier
+//    (numero pour un patient, matricule pour un soignant).
+//  - Le patient n'accède qu'à SES données ; le soignant/admin accède aux
+//    données patients (suivi de l'observance) ; seul l'admin gère les médecins.
+//  - Aucun mot de passe n'est stocké dans Firestore : l'authentification est
+//    entièrement déléguée à Firebase Auth.
+//
+// À publier dans la console Firebase (Firestore → Règles) ou via
+// `firebase deploy --only firestore:rules`.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function role() {
+      return userDoc().role;
+    }
+
+    function isSoignant() {
+      return isSignedIn() && (role() == 'soignant' || role() == 'admin');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && role() == 'admin';
+    }
+
+    // Le patient propriétaire de la fiche numero.
+    function estPatient(numero) {
+      return isSignedIn() && userDoc().numero == numero;
+    }
+
+    // users/{uid} : chacun crée/écrit son propre document ; lecture par tout
+    // utilisateur authentifié (résolution des rôles côté client).
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update, delete: if request.auth.uid == uid || isAdmin();
+    }
+
+    // patients/{numero} (+ sous-collections prises, traitements, rendez_vous) :
+    // accessibles au patient lui-même et à tout soignant/admin.
+    match /patients/{numero} {
+      allow read, write: if isSoignant() || estPatient(numero);
+
+      match /{sousDocument=**} {
+        allow read, write: if isSoignant() || estPatient(numero);
+      }
+    }
+
+    // soignants/{matricule} : lecture par tout utilisateur authentifié
+    // (affichage du médecin référent) ; écriture par l'admin ou le médecin
+    // lui-même.
+    match /soignants/{matricule} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() ||
+                      (isSignedIn() && userDoc().matricule == matricule);
+    }
+
+    // conversations/{id} : réservées aux utilisateurs authentifiés.
+    match /conversations/{conversationId}/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

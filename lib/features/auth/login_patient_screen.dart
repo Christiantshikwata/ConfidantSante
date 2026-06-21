@@ -7,7 +7,7 @@ import '../../core/providers/langue_provider.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
 import '../../core/services/sync_service.dart';
-import '../../core/services/password_service.dart';
+import '../../core/services/auth_service.dart';
 import 'mot_de_passe_screen.dart';
 import '../../core/services/biometric_service.dart';
 import 'package:confidantsante/features/patient/dashboard_patient_screen.dart';
@@ -47,25 +47,33 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
     });
 
     final numero = _numeroController.text.trim();
+    final nom = _nomController.text.trim();
 
-    // Vérifie si le numéro existe déjà
-    final existe = await DatabaseService().patientExiste(numero);
+    // Crée le compte Firebase Auth + le profil Firestore.
+    final res = await AuthService().inscrirePatient(
+      numero: numero,
+      motDePasse: _mdpController.text,
+      nom: nom,
+    );
     if (!mounted) return;
-
-    if (existe) {
+    if (!res.succes) {
       setState(() {
         _enChargement = false;
-        _erreur = AppTranslations.t('erreur_existe');
+        _erreur = AppTranslations.t(res.messageCle ?? 'auth_err_generique');
       });
       return;
     }
 
-    // Crée le patient dans SQLite
-    final id = await DatabaseService().creerPatient(
-      nom: _nomController.text.trim(),
+    // Crée la fiche locale (source des données hors-ligne).
+    var id = await DatabaseService().creerPatient(
+      nom: nom,
       numero: numero,
       motDePasse: _mdpController.text,
     );
+    if (id <= 0) {
+      final existant = await DatabaseService().getPatient(numero);
+      id = (existant?['id'] as int?) ?? 0;
+    }
 
     if (!mounted) return;
 
@@ -73,7 +81,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
       // Sauvegarde la session
       await SessionService().sauvegarderSession(
         patientId: id.toString(),
-        nom: _nomController.text.trim(),
+        nom: nom,
         numero: numero,
       );
 
@@ -103,34 +111,43 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
     });
 
     final numero = _numeroController.text.trim();
-    final motDePasse = _mdpController.text;
 
-    var patient = await DatabaseService().connecterPatient(
+    // Authentification Firebase Auth (email-alias dérivé du numéro).
+    final res = await AuthService().connecterPatient(
       numero: numero,
-      motDePasse: motDePasse,
+      motDePasse: _mdpController.text,
     );
+    if (!mounted) return;
+    if (!res.succes) {
+      setState(() {
+        _enChargement = false;
+        _erreur = AppTranslations.t(res.messageCle ?? 'auth_err_generique');
+      });
+      return;
+    }
 
-    // Repli : compte créé par le médecin sur un autre appareil → Firestore.
+    // Assure la présence de la fiche locale (1re connexion sur cet appareil :
+    // compte créé par le médecin, ou réinstallation de l'app).
+    var patient = await DatabaseService().getPatient(numero);
     if (patient == null) {
       final distant = await SyncService().recupererComptePatient(numero);
       if (distant != null) {
-        final hash = distant['mot_de_passe'] as String? ?? '';
-        final ok = PasswordService.verifier(
-          identifiant: numero,
-          motDePasse: motDePasse,
-          hachageStocke: hash,
+        await DatabaseService().upsertPatientDepuisFirestore(
+          numero:            numero,
+          nom:               distant['nom'] as String? ?? '',
+          soignant:          distant['soignant'] as String?,
+          soignantMatricule: distant['soignant_matricule'] as String?,
+          hopital:           distant['hopital'] as String?,
         );
-        if (ok) {
-          await DatabaseService().creerPatientAvecHash(
-            nom:            distant['nom'] as String? ?? '',
-            numero:         numero,
-            hashMotDePasse: hash,
-            soignant:       distant['soignant'] as String?,
-            hopital:        distant['hopital'] as String?,
-          );
-          patient = await DatabaseService().getPatient(numero);
-        }
+      } else {
+        // Compte Auth sans profil Firestore : fiche locale minimale.
+        await DatabaseService().creerPatient(
+          nom: numero,
+          numero: numero,
+          motDePasse: _mdpController.text,
+        );
       }
+      patient = await DatabaseService().getPatient(numero);
     }
 
     if (!mounted) return;
@@ -751,6 +768,7 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
 
       // Verrouillage : trop de tentatives → déconnexion forcée.
       if (_tentatives >= _maxTentatives) {
+        await AuthService().deconnecter();
         await SessionService().deconnecter();
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(
@@ -812,11 +830,11 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
                   if (ctx.mounted) Navigator.pop(ctx);
                   return;
                 }
-                final patient = await DatabaseService().connecterPatient(
+                final ok = await AuthService().verifierMotDePassePatient(
                   numero: numero,
                   motDePasse: ctrl.text,
                 );
-                if (patient != null) {
+                if (ok) {
                   if (ctx.mounted) Navigator.pop(ctx);
                   if (mounted) {
                     Navigator.pushReplacement(

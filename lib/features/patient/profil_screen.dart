@@ -9,6 +9,7 @@ import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
 import '../../core/providers/langue_provider.dart';
 import '../../core/services/session_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/database_service.dart';
 import '../auth/mot_de_passe_screen.dart';
 import '../messagerie/messagerie_screen.dart';
@@ -91,6 +92,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              await AuthService().deconnecter();
               await SessionService().deconnecter();
               context.read<PatientProvider>().reinitialiser();
               if (!mounted) return;

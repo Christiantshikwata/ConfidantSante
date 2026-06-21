@@ -57,6 +57,14 @@ class AppTranslations {
       'erreur_login':      'Numéro ou mot de passe incorrect.',
       'erreur_existe':     'Ce numéro est déjà enregistré. Connectez-vous.',
       'erreur_creation':   'Erreur lors de la création du compte.',
+      // Auth (Firebase)
+      'auth_err_mdp':         'Mot de passe incorrect.',
+      'auth_err_introuvable': 'Compte introuvable. Vérifiez vos identifiants.',
+      'auth_err_existe':      'Ce compte existe déjà. Connectez-vous.',
+      'auth_err_reseau':      'Pas de connexion. La première connexion nécessite internet.',
+      'auth_err_faible':      'Mot de passe trop faible (6 caractères minimum).',
+      'auth_err_indispo':     'Service d\'authentification indisponible.',
+      'auth_err_generique':   'Une erreur est survenue. Réessayez.',
 
       // PIN
       'creer_pin':         'Créez votre PIN',
@@ -215,6 +223,14 @@ class AppTranslations {
       'erreur_login':      'Incorrect number or password.',
       'erreur_existe':     'This number is already registered. Please sign in.',
       'erreur_creation':   'Error while creating the account.',
+      // Auth (Firebase)
+      'auth_err_mdp':         'Incorrect password.',
+      'auth_err_introuvable': 'Account not found. Check your credentials.',
+      'auth_err_existe':      'This account already exists. Please sign in.',
+      'auth_err_reseau':      'No connection. First sign-in requires internet.',
+      'auth_err_faible':      'Password too weak (minimum 6 characters).',
+      'auth_err_indispo':     'Authentication service unavailable.',
+      'auth_err_generique':   'An error occurred. Please try again.',
 
       'creer_pin':         'Create your PIN',
       'confirmer_pin':     'Confirm your PIN',
@@ -366,6 +382,14 @@ class AppTranslations {
       'erreur_login':      'Nambari au nenosiri si sahihi.',
       'erreur_existe':     'Nambari hii tayari imesajiliwa. Tafadhali ingia.',
       'erreur_creation':   'Hitilafu wakati wa kuunda akaunti.',
+      // Auth (Firebase)
+      'auth_err_mdp':         'Neno la siri si sahihi.',
+      'auth_err_introuvable': 'Akaunti haijapatikana. Angalia taarifa zako.',
+      'auth_err_existe':      'Akaunti hii ipo tayari. Tafadhali ingia.',
+      'auth_err_reseau':      'Hakuna mtandao. Kuingia kwa mara ya kwanza kunahitaji intaneti.',
+      'auth_err_faible':      'Neno la siri ni dhaifu (angalau herufi 6).',
+      'auth_err_indispo':     'Huduma ya uthibitishaji haipatikani.',
+      'auth_err_generique':   'Hitilafu imetokea. Jaribu tena.',
 
       'creer_pin':         'Unda PIN yako',
       'confirmer_pin':     'Thibitisha PIN yako',

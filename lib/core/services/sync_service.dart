@@ -233,12 +233,12 @@ class SyncService {
 
   // ── Comptes patients (médecin → Firestore → patient) ───────────────────────
 
-  /// Médecin : pousse le compte patient (profil + mot de passe haché) vers
-  /// Firestore, pour que le patient puisse se connecter sur son téléphone.
+  /// Médecin : pousse le profil patient vers Firestore (l'authentification est
+  /// gérée par Firebase Auth — aucun mot de passe n'est stocké dans Firestore).
   Future<void> pousserComptePatient({
     required String numero,
     required String nom,
-    required String hashMotDePasse,
+    String? uid,
     String? soignant,
     String? soignantMatricule,
     String? hopital,
@@ -248,7 +248,8 @@ class SyncService {
       await _firestore.collection('patients').doc(numero).set({
         'nom':                nom,
         'numero':             numero,
-        'mot_de_passe':       hashMotDePasse,
+        if (uid != null) 'uid': uid,
+        'role':               'patient',
         'soignant':           soignant,
         'soignant_matricule': soignantMatricule,
         'hopital':            hopital,
@@ -276,22 +277,22 @@ class SyncService {
     }
   }
 
-  /// Admin : pousse un compte médecin (profil + mot de passe haché) vers
-  /// Firestore, pour qu'il puisse se connecter sur son propre téléphone.
+  /// Admin : pousse le profil d'un médecin vers Firestore (l'authentification
+  /// est gérée par Firebase Auth — aucun mot de passe n'est stocké ici).
   Future<void> pousserCompteSoignant({
     required String matricule,
     required String nom,
-    required String hashMotDePasse,
+    String? uid,
     String? specialite,
   }) async {
     if (!firebaseDisponible) return;
     try {
       await _firestore.collection('soignants').doc(matricule).set({
-        'matricule':    matricule,
-        'nom':          nom,
-        'mot_de_passe': hashMotDePasse,
-        'specialite':   specialite,
-        'cree_le':      FieldValue.serverTimestamp(),
+        'matricule':  matricule,
+        'nom':        nom,
+        if (uid != null) 'uid': uid,
+        'specialite': specialite,
+        'cree_le':    FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('[SyncService] Erreur pousserCompteSoignant : $e');
@@ -330,7 +331,6 @@ class SyncService {
           soignant:          d['soignant'] as String?,
           soignantMatricule: d['soignant_matricule'] as String?,
           hopital:           d['hopital'] as String?,
-          hashMotDePasse:    d['mot_de_passe'] as String?,
         );
       }
     } catch (e) {

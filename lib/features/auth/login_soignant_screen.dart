@@ -7,7 +7,7 @@ import '../../core/l10n/app_translations.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
 import '../../core/services/sync_service.dart';
-import '../../core/services/password_service.dart';
+import '../../core/services/auth_service.dart';
 import '../soignant/dashboard_soignant_screen.dart';
 
 class LoginSoignantScreen extends StatefulWidget {
@@ -44,34 +44,41 @@ class _LoginSoignantScreenState extends State<LoginSoignantScreen> {
 
     try {
       final matricule = _matriculeController.text.trim();
-      final motDePasse = _mdpController.text;
 
-      var soignant = await DatabaseService().connecterSoignant(
-        matricule:   matricule,
-        motDePasse:  motDePasse,
+      // Authentification Firebase Auth (email-alias dérivé du matricule).
+      final res = await AuthService().connecterSoignant(
+        matricule:  matricule,
+        motDePasse: _mdpController.text,
       );
+      if (!mounted) return;
+      if (!res.succes) {
+        setState(() {
+          _erreur = AppTranslations.t(res.messageCle ?? 'auth_err_generique');
+        });
+        return;
+      }
 
-      // Repli : compte médecin créé par l'admin sur un autre appareil.
+      // Assure la présence de la fiche locale du soignant (1re connexion sur
+      // cet appareil : médecin créé par l'admin, ou amorçage de l'admin démo).
+      var soignant = await DatabaseService().getSoignantParMatricule(matricule);
       if (soignant == null) {
         final distant = await SyncService().recupererCompteSoignant(matricule);
         if (distant != null) {
-          final hash = distant['mot_de_passe'] as String? ?? '';
-          final ok = PasswordService.verifier(
-            identifiant: matricule,
-            motDePasse: motDePasse,
-            hachageStocke: hash,
+          await DatabaseService().creerSoignantAvecHash(
+            nom:            distant['nom'] as String? ?? '',
+            matricule:      matricule,
+            hashMotDePasse: '',
+            specialite:     distant['specialite'] as String?,
           );
-          if (ok) {
-            await DatabaseService().creerSoignantAvecHash(
-              nom:            distant['nom'] as String? ?? '',
-              matricule:      matricule,
-              hashMotDePasse: hash,
-              specialite:     distant['specialite'] as String?,
-            );
-            soignant =
-                await DatabaseService().getSoignantParMatricule(matricule);
-          }
+        } else if (matricule == AuthService.adminMatricule) {
+          await DatabaseService().creerSoignantAvecHash(
+            nom:            AuthService.adminNomDemo,
+            matricule:      matricule,
+            hashMotDePasse: '',
+            specialite:     'Médecin infectiologue',
+          );
         }
+        soignant = await DatabaseService().getSoignantParMatricule(matricule);
       }
 
       if (!mounted) return;
