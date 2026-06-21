@@ -56,6 +56,10 @@ class PatientProvider extends ChangeNotifier {
 
     if (_patientId == null) return;
 
+    // Enregistre les doses manquées des jours écoulés (réconciliation) —
+    // avant de désactiver les rappels expirés, pour couvrir toute la durée.
+    await DatabaseService().reconcilierPrisesManquees(_patientId!);
+
     // Désactive et annule les rappels dont le protocole est terminé
     final expires = await DatabaseService().desactiverRappelsExpires(_patientId!);
     for (final id in expires) {

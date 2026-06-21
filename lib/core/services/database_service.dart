@@ -392,54 +392,89 @@ class DatabaseService {
 
   /// Calcule le taux d'observance sur 30 jours.
   ///
-  /// Observance = doses prises / doses attendues, où les doses attendues sont
-  /// estimées à partir de chaque rappel actif et de sa date de création
-  /// (une dose attendue par jour depuis la création, plafonnée à 30 jours).
-  /// Une prise par rappel et par jour est comptée au maximum.
+  /// Après réconciliation (cf. reconcilierPrisesManquees), la table `prises`
+  /// contient une entrée par jour écoulé et par rappel : « pris » ou « manque ».
+  /// Observance = prises confirmées / (prises + manquées).
   Future<double> getTauxObservance(int patientId) async {
     final db = await database;
-    final maintenant = DateTime.now();
-    final debutFenetre = DateTime(maintenant.year, maintenant.month, maintenant.day)
-        .subtract(const Duration(days: 29));
+    final debut = DateTime.now()
+        .subtract(const Duration(days: 30))
+        .toIso8601String();
 
+    final total = await db.query(
+      'prises',
+      where: 'patient_id = ? AND date_heure > ?',
+      whereArgs: [patientId, debut],
+    );
+    if (total.isEmpty) return 0.0;
+
+    final pris = total.where((p) => p['statut'] == 'pris').length;
+    return (pris / total.length) * 100;
+  }
+
+  /// Réconciliation des doses manquées : pour chaque rappel actif, marque
+  /// « manque » chaque jour écoulé (jusqu'à hier, sans dépasser la date de fin
+  /// du protocole) où aucune prise n'a été enregistrée. Idempotent.
+  Future<void> reconcilierPrisesManquees(int patientId) async {
+    final db = await database;
     final rappels = await db.query(
       'rappels',
       where: 'patient_id = ? AND est_actif = 1',
       whereArgs: [patientId],
     );
-    if (rappels.isEmpty) return 0.0;
+    if (rappels.isEmpty) return;
 
-    // Doses attendues
-    int attendues = 0;
+    final now = DateTime.now();
+    final today0 = DateTime(now.year, now.month, now.day);
+    final fenetreDebut = today0.subtract(const Duration(days: 29));
+    // On ne traite que jusqu'à HIER (la journée en cours n'est pas terminée).
+    final hier = today0.subtract(const Duration(days: 1));
+
     for (final r in rappels) {
+      final id = r['id'] as int;
       final creationStr = r['date_creation'] as String?;
-      final creation = creationStr != null
-          ? DateTime.tryParse(creationStr)
-          : null;
-      final debutRappel =
-          (creation != null && creation.isAfter(debutFenetre))
-              ? DateTime(creation.year, creation.month, creation.day)
-              : debutFenetre;
-      final jours = maintenant.difference(debutRappel).inDays + 1;
-      attendues += jours.clamp(1, 30);
-    }
-    if (attendues == 0) return 0.0;
+      final creation =
+          creationStr != null ? DateTime.tryParse(creationStr) : null;
+      if (creation == null) continue; // sans date de début, on ne sait pas
 
-    // Doses prises distinctes (rappel, jour) sur 30 jours
-    final prises = await db.query(
-      'prises',
-      where: 'patient_id = ? AND statut = ? AND date_heure > ?',
-      whereArgs: [patientId, 'pris', debutFenetre.toIso8601String()],
-    );
-    final joursPris = <String>{};
-    for (final p in prises) {
-      final dt = DateTime.tryParse(p['date_heure'] as String? ?? '');
-      if (dt == null) continue;
-      joursPris.add('${p['traitement_id']}_${dt.year}-${dt.month}-${dt.day}');
-    }
+      final finStr = r['date_fin'] as String?;
+      final fin = finStr != null ? DateTime.tryParse(finStr) : null;
 
-    final taux = (joursPris.length / attendues) * 100;
-    return taux.clamp(0, 100).toDouble();
+      var jour = DateTime(creation.year, creation.month, creation.day);
+      if (jour.isBefore(fenetreDebut)) jour = fenetreDebut;
+
+      var dernier = hier;
+      if (fin != null) {
+        final finJour = DateTime(fin.year, fin.month, fin.day);
+        if (finJour.isBefore(dernier)) dernier = finJour;
+      }
+
+      while (!jour.isAfter(dernier)) {
+        final debutJ = jour.toIso8601String();
+        final finJ =
+            DateTime(jour.year, jour.month, jour.day, 23, 59, 59)
+                .toIso8601String();
+        final existe = await db.query(
+          'prises',
+          where:
+              'traitement_id = ? AND patient_id = ? AND date_heure BETWEEN ? AND ?',
+          whereArgs: [id, patientId, debutJ, finJ],
+          limit: 1,
+        );
+        if (existe.isEmpty) {
+          await db.insert('prises', {
+            'traitement_id': id,
+            'patient_id': patientId,
+            'date_heure':
+                DateTime(jour.year, jour.month, jour.day, 12, 0)
+                    .toIso8601String(),
+            'statut': 'manque',
+            'synchronise': 0,
+          });
+        }
+        jour = jour.add(const Duration(days: 1));
+      }
+    }
   }
 
   // Récupère l'historique des 30 derniers jours
