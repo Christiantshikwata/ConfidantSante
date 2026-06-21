@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
 import '../../core/services/sync_service.dart';
+import '../../core/services/report_service.dart';
 import '../messagerie/messagerie_screen.dart';
 import 'ajouter_patient_screen.dart';
 import 'gerer_medecins_screen.dart';
@@ -111,6 +112,27 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/role', (route) => false);
   }
 
+  Future<void> _exporterRapport() async {
+    if (_patients.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucun patient à exporter')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Génération du rapport Excel…')),
+    );
+    try {
+      await ReportService().exporterEtPartager(_patients);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de l\'export : $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -124,6 +146,7 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
         onRefresh: _chargerDonnees,
         onGererMedecins: _ouvrirGestionMedecins,
         onDeconnecter: _deconnecter,
+        onExporter: _exporterRapport,
       )
           : _PagePatients(
         patients: _patients,
@@ -187,6 +210,7 @@ class _PageAccueil extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onGererMedecins;
   final VoidCallback onDeconnecter;
+  final VoidCallback onExporter;
 
   const _PageAccueil({
     required this.nomSoignant,
@@ -196,6 +220,7 @@ class _PageAccueil extends StatelessWidget {
     required this.onRefresh,
     required this.onGererMedecins,
     required this.onDeconnecter,
+    required this.onExporter,
   });
 
   static String _salutation() {
@@ -442,6 +467,31 @@ class _PageAccueil extends StatelessWidget {
                       ),
                     ),
                   ],
+
+                  // Bouton export Excel
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: onExporter,
+                      icon: const Icon(Icons.file_download_outlined, size: 20),
+                      label: const Text(
+                        'Exporter le rapport (Excel)',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.success,
+                        side: BorderSide(
+                            color: AppColors.success.withValues(alpha: 0.6),
+                            width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
 
                   const SizedBox(height: 20),
 
