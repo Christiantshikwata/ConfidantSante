@@ -595,6 +595,69 @@ class DatabaseService {
     );
   }
 
+  /// Crée un médecin avec un mot de passe DÉJÀ haché (compte récupéré de
+  /// Firestore lors d'une première connexion sur le téléphone du médecin).
+  Future<int> creerSoignantAvecHash({
+    required String nom,
+    required String matricule,
+    required String hashMotDePasse,
+    String? specialite,
+  }) async {
+    final db = await database;
+    return await db.insert(
+      'soignants',
+      {
+        'nom':           nom,
+        'matricule':     matricule,
+        'mot_de_passe':  hashMotDePasse,
+        'specialite':    specialite ?? 'Médecin',
+        'service':       'VIH/SIDA',
+        'date_creation': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Insère/maj un patient reçu de Firestore (vue du médecin sur ses patients).
+  /// Dédup par numéro ; si le patient existe déjà, met à jour le rattachement.
+  Future<void> upsertPatientDepuisFirestore({
+    required String numero,
+    required String nom,
+    String? soignant,
+    String? soignantMatricule,
+    String? hopital,
+    String? hashMotDePasse,
+  }) async {
+    final db = await database;
+    final existant = await db.query('patients',
+        where: 'numero = ?', whereArgs: [numero], limit: 1);
+    if (existant.isNotEmpty) {
+      await db.update(
+        'patients',
+        {
+          'soignant_matricule': soignantMatricule,
+          if (soignant != null) 'soignant': soignant,
+        },
+        where: 'numero = ?',
+        whereArgs: [numero],
+      );
+      return;
+    }
+    await db.insert(
+      'patients',
+      {
+        'nom':                nom,
+        'numero':             numero,
+        'mot_de_passe':       hashMotDePasse ?? '',
+        'soignant':           soignant,
+        'soignant_matricule': soignantMatricule,
+        'hopital':            hopital,
+        'date_creation':      DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
   /// Liste de tous les médecins.
   Future<List<Map<String, dynamic>>> getTousSoignants() async {
     final db = await database;

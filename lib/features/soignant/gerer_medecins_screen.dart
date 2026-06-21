@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/sync_service.dart';
+import '../../core/services/password_service.dart';
 
 class GererMedecinsScreen extends StatefulWidget {
   const GererMedecinsScreen({super.key});
@@ -128,13 +130,23 @@ class _GererMedecinsScreenState extends State<GererMedecinsScreen> {
                         setModal(() => erreur = 'Ce matricule existe déjà.');
                         return;
                       }
+                      final spec = specialiteCtrl.text.trim().isEmpty
+                          ? 'Médecin'
+                          : specialiteCtrl.text.trim();
                       await DatabaseService().creerSoignant(
                         nom: nom,
                         matricule: matricule,
                         motDePasse: mdp,
-                        specialite: specialiteCtrl.text.trim().isEmpty
-                            ? 'Médecin'
-                            : specialiteCtrl.text.trim(),
+                        specialite: spec,
+                      );
+                      // Pousse le compte vers Firestore → connexion possible
+                      // sur le propre téléphone du médecin.
+                      await SyncService().pousserCompteSoignant(
+                        matricule: matricule,
+                        nom: nom,
+                        hashMotDePasse: PasswordService.hash(
+                            identifiant: matricule, motDePasse: mdp),
+                        specialite: spec,
                       );
                       if (ctx.mounted) Navigator.pop(ctx);
                     },

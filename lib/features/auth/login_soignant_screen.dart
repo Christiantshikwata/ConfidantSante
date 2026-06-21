@@ -6,6 +6,8 @@ import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_translations.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
+import '../../core/services/sync_service.dart';
+import '../../core/services/password_service.dart';
 import '../soignant/dashboard_soignant_screen.dart';
 
 class LoginSoignantScreen extends StatefulWidget {
@@ -41,10 +43,36 @@ class _LoginSoignantScreenState extends State<LoginSoignantScreen> {
     });
 
     try {
-      final soignant = await DatabaseService().connecterSoignant(
-        matricule:   _matriculeController.text.trim(),
-        motDePasse:  _mdpController.text,
+      final matricule = _matriculeController.text.trim();
+      final motDePasse = _mdpController.text;
+
+      var soignant = await DatabaseService().connecterSoignant(
+        matricule:   matricule,
+        motDePasse:  motDePasse,
       );
+
+      // Repli : compte médecin créé par l'admin sur un autre appareil.
+      if (soignant == null) {
+        final distant = await SyncService().recupererCompteSoignant(matricule);
+        if (distant != null) {
+          final hash = distant['mot_de_passe'] as String? ?? '';
+          final ok = PasswordService.verifier(
+            identifiant: matricule,
+            motDePasse: motDePasse,
+            hachageStocke: hash,
+          );
+          if (ok) {
+            await DatabaseService().creerSoignantAvecHash(
+              nom:            distant['nom'] as String? ?? '',
+              matricule:      matricule,
+              hashMotDePasse: hash,
+              specialite:     distant['specialite'] as String?,
+            );
+            soignant =
+                await DatabaseService().getSoignantParMatricule(matricule);
+          }
+        }
+      }
 
       if (!mounted) return;
 

@@ -276,6 +276,68 @@ class SyncService {
     }
   }
 
+  /// Admin : pousse un compte médecin (profil + mot de passe haché) vers
+  /// Firestore, pour qu'il puisse se connecter sur son propre téléphone.
+  Future<void> pousserCompteSoignant({
+    required String matricule,
+    required String nom,
+    required String hashMotDePasse,
+    String? specialite,
+  }) async {
+    if (!firebaseDisponible) return;
+    try {
+      await _firestore.collection('soignants').doc(matricule).set({
+        'matricule':    matricule,
+        'nom':          nom,
+        'mot_de_passe': hashMotDePasse,
+        'specialite':   specialite,
+        'cree_le':      FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pousserCompteSoignant : $e');
+    }
+  }
+
+  /// Médecin : récupère son compte depuis Firestore (première connexion).
+  Future<Map<String, dynamic>?> recupererCompteSoignant(
+      String matricule) async {
+    if (!firebaseDisponible) return null;
+    try {
+      final doc =
+          await _firestore.collection('soignants').doc(matricule).get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (e) {
+      debugPrint('[SyncService] Erreur recupererCompteSoignant : $e');
+      return null;
+    }
+  }
+
+  /// Médecin : récupère depuis Firestore les patients qui lui sont rattachés
+  /// (création ou migration) et les enregistre localement.
+  Future<void> pullPatientsDuSoignant(String matricule) async {
+    if (!firebaseDisponible) return;
+    try {
+      final snap = await _firestore
+          .collection('patients')
+          .where('soignant_matricule', isEqualTo: matricule)
+          .get();
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        await DatabaseService().upsertPatientDepuisFirestore(
+          numero:            d['numero'] as String? ?? doc.id,
+          nom:               d['nom'] as String? ?? '',
+          soignant:          d['soignant'] as String?,
+          soignantMatricule: d['soignant_matricule'] as String?,
+          hopital:           d['hopital'] as String?,
+          hashMotDePasse:    d['mot_de_passe'] as String?,
+        );
+      }
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pullPatientsDuSoignant : $e');
+    }
+  }
+
   /// Patient : récupère le compte (profil + hash) depuis Firestore, s'il existe.
   Future<Map<String, dynamic>?> recupererComptePatient(String numero) async {
     if (!firebaseDisponible) return null;

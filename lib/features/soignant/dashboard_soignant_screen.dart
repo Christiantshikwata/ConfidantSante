@@ -37,6 +37,12 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
       final matricule = await SessionService().getSoignantMatricule() ?? '';
       final admin = DatabaseService().estAdmin(matricule);
 
+      // Médecin (non-admin) : récupère d'abord ses patients depuis Firestore
+      // (création ou migration sur un autre appareil), puis lit en local.
+      if (!admin && matricule.isNotEmpty) {
+        await SyncService().pullPatientsDuSoignant(matricule);
+      }
+
       // L'admin voit tous les patients ; un médecin ne voit que les siens.
       final patients = admin
           ? await DatabaseService().getTousPatients()
