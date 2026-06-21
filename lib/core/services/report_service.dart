@@ -27,14 +27,22 @@ class ReportService {
     recap.appendRow([
       TextCellValue('Nom'),
       TextCellValue('Numero'),
+      TextCellValue('Protocole'),
       TextCellValue('Observance (%)'),
       TextCellValue('Statut'),
     ]);
     for (final p in patients) {
       final obs = (p['observance'] as double? ?? 0);
+      final traitements =
+          await DatabaseService().getTraitements(p['id'] as int);
+      final protocole = traitements
+          .map((t) => t['nom_medicament'] as String? ?? '')
+          .where((n) => n.isNotEmpty)
+          .join(', ');
       recap.appendRow([
         TextCellValue(p['nom'] as String? ?? ''),
         TextCellValue('+243 ${p['numero'] ?? ''}'),
+        TextCellValue(protocole.isEmpty ? '—' : protocole),
         IntCellValue(obs.round()),
         TextCellValue(_statut(obs)),
       ]);
