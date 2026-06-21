@@ -5,6 +5,9 @@ import 'package:provider/provider.dart';
 import '/../core/constants/app_colors.dart';
 import '/../core/l10n/app_translations.dart';
 import '/../core/providers/langue_provider.dart';
+import '/../core/services/database_service.dart';
+import '/../core/services/session_service.dart';
+import '/../core/services/sync_service.dart';
 import '../../auth/mot_de_passe_screen.dart'; // PinScreen
 
 class ParametresScreen extends StatefulWidget {
@@ -16,6 +19,103 @@ class ParametresScreen extends StatefulWidget {
 
 class _ParametresScreenState extends State<ParametresScreen> {
   bool _notifsActives = true;
+  int? _patientId;
+  String _numero = '';
+  String _medecinActuel = '—';
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerMedecin();
+  }
+
+  Future<void> _chargerMedecin() async {
+    final idStr = await SessionService().getPatientId();
+    final numero = await SessionService().getNumero();
+    if (numero == null) return;
+    final patient = await DatabaseService().getPatient(numero);
+    if (!mounted) return;
+    setState(() {
+      _patientId = int.tryParse(idStr ?? '');
+      _numero = numero;
+      final nom = patient?['soignant'] as String?;
+      _medecinActuel = (nom != null && nom.isNotEmpty)
+          ? nom
+          : (patient?['soignant_matricule'] as String? ?? '—');
+    });
+  }
+
+  Future<void> _changerMedecin() async {
+    final ctrl = TextEditingController();
+    String? erreur;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Changer de médecin'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Entrez le matricule de votre nouveau médecin référent.',
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  hintText: 'Ex. : MED-2024-002',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (erreur != null) ...[
+                const SizedBox(height: 8),
+                Text(erreur!,
+                    style: const TextStyle(
+                        color: AppColors.danger, fontSize: 12)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final matricule = ctrl.text.trim();
+                if (matricule.isEmpty || _patientId == null) {
+                  setDlg(() => erreur = 'Matricule requis.');
+                  return;
+                }
+                final soignant = await DatabaseService()
+                    .getSoignantParMatricule(matricule);
+                final nomSoignant = soignant?['nom'] as String?;
+                await DatabaseService().changerSoignantPatient(
+                  patientId: _patientId!,
+                  matricule: matricule,
+                  nomSoignant: nomSoignant,
+                );
+                await SyncService().mettreAJourSoignantPatient(
+                  numero: _numero,
+                  matricule: matricule,
+                  nomSoignant: nomSoignant,
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('Valider'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mounted) _chargerMedecin();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,6 +246,24 @@ class _ParametresScreenState extends State<ParametresScreen> {
                           ),
                         );
                       },
+                      dernier: true,
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // ── SECTION MON MÉDECIN ─────────────────────────────
+                _SectionLabel('Mon médecin'),
+                const SizedBox(height: 10),
+
+                _CarteParametres(
+                  children: [
+                    _LigneAction(
+                      icon: Icons.medical_services_outlined,
+                      label: 'Changer de médecin',
+                      sousTitre: 'Médecin actuel : $_medecinActuel',
+                      onTap: _changerMedecin,
                       dernier: true,
                     ),
                   ],

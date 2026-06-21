@@ -621,6 +621,33 @@ class DatabaseService {
     );
   }
 
+  /// Récupère un médecin par son matricule (ou null).
+  Future<Map<String, dynamic>?> getSoignantParMatricule(
+      String matricule) async {
+    final db = await database;
+    final res = await db.query('soignants',
+        where: 'matricule = ?', whereArgs: [matricule], limit: 1);
+    return res.isNotEmpty ? res.first : null;
+  }
+
+  /// Migration : rattache un patient à un autre médecin (matricule + nom).
+  Future<void> changerSoignantPatient({
+    required int patientId,
+    required String matricule,
+    String? nomSoignant,
+  }) async {
+    final db = await database;
+    await db.update(
+      'patients',
+      {
+        'soignant_matricule': matricule,
+        if (nomSoignant != null) 'soignant': nomSoignant,
+      },
+      where: 'id = ?',
+      whereArgs: [patientId],
+    );
+  }
+
   /// Calcule le taux d'observance d'un patient spécifique (local)
   Future<double> getObservancePatient(int patientId) async {
     return await getTauxObservance(patientId);

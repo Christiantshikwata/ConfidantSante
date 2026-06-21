@@ -80,12 +80,13 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
         // Pousse le compte vers Firestore → le patient peut se connecter
         // sur son propre téléphone (même numéro + mot de passe).
         await SyncService().pousserComptePatient(
-          numero:         numero,
-          nom:            nom,
+          numero:            numero,
+          nom:               nom,
           hashMotDePasse:
               PasswordService.hash(identifiant: numero, motDePasse: pwd),
-          soignant:       'Dr. Yves Ndetereyuwe',
-          hopital:        'Centre Hospitalier Congo-Chine',
+          soignant:          nomSoignant ?? 'Dr. Yves Ndetereyuwe',
+          soignantMatricule: matricule,
+          hopital:           'Centre Hospitalier Congo-Chine',
         );
 
         // Attribue le protocole : l'heure sera choisie par le patient.

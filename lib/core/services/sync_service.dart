@@ -95,12 +95,13 @@ class SyncService {
           .collection('patients')
           .doc(numero)
           .set({
-        'nom':          patient['nom'],
-        'numero':       patient['numero'],
-        'soignant':     patient['soignant'],
-        'hopital':      patient['hopital'],
-        'date_creation': patient['date_creation'],
-        'derniere_sync': FieldValue.serverTimestamp(),
+        'nom':                patient['nom'],
+        'numero':             patient['numero'],
+        'soignant':           patient['soignant'],
+        'soignant_matricule': patient['soignant_matricule'],
+        'hopital':            patient['hopital'],
+        'date_creation':      patient['date_creation'],
+        'derniere_sync':      FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       debugPrint('[SyncService] Profil patient synchronisé');
@@ -239,20 +240,39 @@ class SyncService {
     required String nom,
     required String hashMotDePasse,
     String? soignant,
+    String? soignantMatricule,
     String? hopital,
   }) async {
     if (!firebaseDisponible) return;
     try {
       await _firestore.collection('patients').doc(numero).set({
-        'nom':          nom,
-        'numero':       numero,
-        'mot_de_passe': hashMotDePasse,
-        'soignant':     soignant,
-        'hopital':      hopital,
-        'compte_cree':  FieldValue.serverTimestamp(),
+        'nom':                nom,
+        'numero':             numero,
+        'mot_de_passe':       hashMotDePasse,
+        'soignant':           soignant,
+        'soignant_matricule': soignantMatricule,
+        'hopital':            hopital,
+        'compte_cree':        FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('[SyncService] Erreur pousserComptePatient : $e');
+    }
+  }
+
+  /// Met à jour le médecin référent d'un patient dans Firestore (migration).
+  Future<void> mettreAJourSoignantPatient({
+    required String numero,
+    required String matricule,
+    String? nomSoignant,
+  }) async {
+    if (!firebaseDisponible) return;
+    try {
+      await _firestore.collection('patients').doc(numero).set({
+        'soignant_matricule': matricule,
+        if (nomSoignant != null) 'soignant': nomSoignant,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('[SyncService] Erreur mettreAJourSoignantPatient : $e');
     }
   }
 
