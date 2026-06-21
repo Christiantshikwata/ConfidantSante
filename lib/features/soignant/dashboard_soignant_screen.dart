@@ -75,6 +75,36 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
     _chargerDonnees();
   }
 
+  Future<void> _deconnecter() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: const Text('Se déconnecter'),
+        content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Déconnexion'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await SessionService().deconnecter();
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/role', (route) => false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -87,6 +117,7 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
         estAdmin: _estAdmin,
         onRefresh: _chargerDonnees,
         onGererMedecins: _ouvrirGestionMedecins,
+        onDeconnecter: _deconnecter,
       )
           : _PagePatients(
         patients: _patients,
@@ -149,6 +180,7 @@ class _PageAccueil extends StatelessWidget {
   final bool estAdmin;
   final VoidCallback onRefresh;
   final VoidCallback onGererMedecins;
+  final VoidCallback onDeconnecter;
 
   const _PageAccueil({
     required this.nomSoignant,
@@ -157,6 +189,7 @@ class _PageAccueil extends StatelessWidget {
     required this.estAdmin,
     required this.onRefresh,
     required this.onGererMedecins,
+    required this.onDeconnecter,
   });
 
   static String _salutation() {
@@ -261,6 +294,23 @@ class _PageAccueil extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Bouton déconnexion
+                          GestureDetector(
+                            onTap: onDeconnecter,
+                            child: Container(
+                              width: 38, height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: const Icon(Icons.logout,
+                                  color: Colors.white, size: 18),
                             ),
                           ),
                         ],
