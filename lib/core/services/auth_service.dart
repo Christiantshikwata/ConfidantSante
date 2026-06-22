@@ -245,6 +245,9 @@ class AuthService {
 
   // ── Traduction des codes d'erreur Firebase → clés i18n ──────────────────────
   String _cleErreur(FirebaseAuthException e) {
+    // Trace le code exact dans la console (diagnostic). Ex. operation-not-allowed
+    // = fournisseur E-mail/Mot de passe non activé dans la console Firebase.
+    debugPrint('[AuthService] FirebaseAuthException code=${e.code} message=${e.message}');
     switch (e.code) {
       case 'wrong-password':
       case 'invalid-credential':
