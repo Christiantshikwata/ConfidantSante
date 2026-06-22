@@ -534,9 +534,23 @@ class _ProfilScreenState extends State<ProfilScreen> {
                         couleurIcone: const Color(0xFF0288D1),
                         fond: const Color(0xFFE3F2FD),
                         label: 'Contacter mon soignant',
-                        onTap: () {
+                        onTap: () async {
                           final numero = patient.numero;
                           if (numero.isEmpty) return;
+                          final row =
+                              await DatabaseService().getPatient(numero);
+                          final mat =
+                              (row?['soignant_matricule'] as String?)?.trim();
+                          final nomMed =
+                              (row?['soignant'] as String?)?.trim();
+                          final matricule = (mat != null && mat.isNotEmpty)
+                              ? mat
+                              : DatabaseService.soignantDemoMatricule;
+                          final destinataire =
+                              (nomMed != null && nomMed.isNotEmpty)
+                                  ? nomMed
+                                  : 'Dr. Yves Ndetereyuwe';
+                          if (!context.mounted) return;
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -544,11 +558,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                 conversationId:
                                     MessagerieScreen.conversationIdPour(
                                   patientNumero: numero,
-                                  soignantMatricule:
-                                      DatabaseService.soignantDemoMatricule,
+                                  soignantMatricule: matricule,
                                 ),
                                 monId: numero,
-                                destinataireNom: 'Dr. Yves Ndetereyuwe',
+                                destinataireNom: destinataire,
                                 role: 'patient',
                               ),
                             ),

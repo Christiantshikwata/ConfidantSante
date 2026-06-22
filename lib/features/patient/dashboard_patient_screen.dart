@@ -4,6 +4,8 @@ import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
 import '../../core/providers/langue_provider.dart';
+import '../../core/services/database_service.dart';
+import '../messagerie/messagerie_screen.dart';
 import 'agenda_screen.dart';
 import 'rappels_screen.dart';
 import 'discretion_screen.dart';
@@ -116,6 +118,38 @@ class _PageAccueil extends StatelessWidget {
     return 'bonsoir';
   }
 
+  // Ouvre la conversation avec le médecin référent RÉEL du patient
+  // (repli sur le médecin de démonstration si non renseigné).
+  Future<void> _ouvrirMessagerie(
+      BuildContext context, PatientProvider patient) async {
+    final numero = patient.numero;
+    if (numero.isEmpty) return;
+    final row = await DatabaseService().getPatient(numero);
+    final mat = (row?['soignant_matricule'] as String?)?.trim();
+    final nomMed = (row?['soignant'] as String?)?.trim();
+    final matricule = (mat != null && mat.isNotEmpty)
+        ? mat
+        : DatabaseService.soignantDemoMatricule;
+    final destinataire = (nomMed != null && nomMed.isNotEmpty)
+        ? nomMed
+        : 'Dr. Yves Ndetereyuwe';
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MessagerieScreen(
+          conversationId: MessagerieScreen.conversationIdPour(
+            patientNumero: numero,
+            soignantMatricule: matricule,
+          ),
+          monId: numero,
+          destinataireNom: destinataire,
+          role: 'patient',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     context.watch<LangueProvider>();
@@ -191,6 +225,30 @@ class _PageAccueil extends StatelessWidget {
                                     ),
                                   ),
                                 ],
+                              ),
+                            ),
+
+                            // Bouton messagerie (accès direct au soignant)
+                            GestureDetector(
+                              onTap: () => _ouvrirMessagerie(context, patient),
+                              child: Container(
+                                width: 42, height: 42,
+                                margin: const EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.4),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.chat_bubble_outline,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
                               ),
                             ),
 
