@@ -43,6 +43,47 @@ class AuthService {
   static String emailSoignant(String matricule) =>
       '${matricule.trim().toLowerCase()}@$domaine';
 
+  // ── Connexion / création résilientes ────────────────────────────────────────
+  // Contourne un bug connu de firebase_auth 4.x :
+  //   type 'List<Object?>' is not a subtype of type 'PigeonUserDetails?'
+  // L'authentification réussit côté natif mais le décodage Dart du résultat
+  // échoue. Dans ce cas, currentUser est tout de même renseigné : on l'utilise.
+  Future<String> _connexion(
+      FirebaseAuth auth, String email, String motDePasse) async {
+    try {
+      final cred = await auth.signInWithEmailAndPassword(
+          email: email, password: motDePasse);
+      final uid = cred.user?.uid ?? auth.currentUser?.uid;
+      if (uid != null) return uid;
+      throw FirebaseAuthException(code: 'no-user');
+    } catch (e) {
+      final u = auth.currentUser;
+      if (u != null) {
+        debugPrint('[AuthService] signIn : contournement bug Pigeon (currentUser ok)');
+        return u.uid;
+      }
+      rethrow;
+    }
+  }
+
+  Future<String> _creation(
+      FirebaseAuth auth, String email, String motDePasse) async {
+    try {
+      final cred = await auth.createUserWithEmailAndPassword(
+          email: email, password: motDePasse);
+      final uid = cred.user?.uid ?? auth.currentUser?.uid;
+      if (uid != null) return uid;
+      throw FirebaseAuthException(code: 'no-user');
+    } catch (e) {
+      final u = auth.currentUser;
+      if (u != null) {
+        debugPrint('[AuthService] createUser : contournement bug Pigeon (currentUser ok)');
+        return u.uid;
+      }
+      rethrow;
+    }
+  }
+
   // ── PATIENT : inscription (auto-inscription depuis l'écran patient) ─────────
   Future<AuthResultat> inscrirePatient({
     required String numero,
@@ -51,11 +92,7 @@ class AuthService {
   }) async {
     if (!disponible) return AuthResultat.echec('auth_err_indispo');
     try {
-      final cred = await _auth.createUserWithEmailAndPassword(
-        email: emailPatient(numero),
-        password: motDePasse,
-      );
-      final uid = cred.user!.uid;
+      final uid = await _creation(_auth, emailPatient(numero), motDePasse);
       // 1) Doc rôle (lisible par les règles) — créé par l'utilisateur lui-même.
       await _db.collection('users').doc(uid).set({
         'role': 'patient',
@@ -75,7 +112,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] inscrirePatient: $e');
-      return AuthResultat.echec('auth_err_generique');
+      return AuthResultat.echec('Erreur: $e');
     }
   }
 
@@ -86,11 +123,7 @@ class AuthService {
   }) async {
     if (!disponible) return AuthResultat.echec('auth_err_indispo');
     try {
-      final cred = await _auth.signInWithEmailAndPassword(
-        email: emailPatient(numero),
-        password: motDePasse,
-      );
-      final uid = cred.user!.uid;
+      final uid = await _connexion(_auth, emailPatient(numero), motDePasse);
       // Assure le doc rôle (cas d'un patient créé par le médecin : son doc
       // users/{uid} n'existe pas encore car le médecin ne pouvait pas l'écrire).
       await _db.collection('users').doc(uid).set({
@@ -102,7 +135,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] connecterPatient: $e');
-      return AuthResultat.echec('auth_err_generique');
+      return AuthResultat.echec('Erreur: $e');
     }
   }
 
@@ -114,11 +147,7 @@ class AuthService {
     if (!disponible) return AuthResultat.echec('auth_err_indispo');
     final email = emailSoignant(matricule);
     try {
-      final cred = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: motDePasse,
-      );
-      final uid = cred.user!.uid;
+      final uid = await _connexion(_auth, email, motDePasse);
       await _db.collection('users').doc(uid).set({
         'role': matricule == adminMatricule ? 'admin' : 'soignant',
         'matricule': matricule,
@@ -142,11 +171,7 @@ class AuthService {
 
   Future<AuthResultat> _amorcerAdminDemo(String email, String mdp) async {
     try {
-      final cred = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: mdp,
-      );
-      final uid = cred.user!.uid;
+      final uid = await _creation(_auth, email, mdp);
       await _db.collection('users').doc(uid).set({
         'role': 'admin',
         'matricule': adminMatricule,
@@ -188,11 +213,7 @@ class AuthService {
         options: DefaultFirebaseOptions.currentPlatform,
       );
       final authSec = FirebaseAuth.instanceFor(app: secondaire);
-      final cred = await authSec.createUserWithEmailAndPassword(
-        email: email,
-        password: motDePasse,
-      );
-      final uid = cred.user!.uid;
+      final uid = await _creation(authSec, email, motDePasse);
       // Écrit depuis la session du NOUVEL utilisateur (autorisé : self).
       final dbSec = FirebaseFirestore.instanceFor(app: secondaire);
       await dbSec.collection('users').doc(uid).set({
@@ -207,7 +228,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] creerUtilisateurSecondaire: $e');
-      return AuthResultat.echec('auth_err_generique');
+      return AuthResultat.echec('Erreur: $e');
     } finally {
       if (secondaire != null) {
         try {
@@ -225,10 +246,7 @@ class AuthService {
   }) async {
     if (!disponible) return false;
     try {
-      await _auth.signInWithEmailAndPassword(
-        email: emailPatient(numero),
-        password: motDePasse,
-      );
+      await _connexion(_auth, emailPatient(numero), motDePasse);
       return true;
     } catch (_) {
       return false;
@@ -245,8 +263,6 @@ class AuthService {
 
   // ── Traduction des codes d'erreur Firebase → clés i18n ──────────────────────
   String _cleErreur(FirebaseAuthException e) {
-    // Trace le code exact dans la console (diagnostic). Ex. operation-not-allowed
-    // = fournisseur E-mail/Mot de passe non activé dans la console Firebase.
     debugPrint('[AuthService] FirebaseAuthException code=${e.code} message=${e.message}');
     switch (e.code) {
       case 'wrong-password':
@@ -269,7 +285,8 @@ class AuthService {
 }
 
 /// Résultat d'une opération d'authentification. En cas d'échec, [messageCle]
-/// est une clé du dictionnaire AppTranslations.
+/// est une clé du dictionnaire AppTranslations (ou un message brut de
+/// diagnostic affiché tel quel).
 class AuthResultat {
   final bool succes;
   final String? uid;
