@@ -112,7 +112,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] inscrirePatient: $e');
-      return AuthResultat.echec('Erreur: $e');
+      return AuthResultat.echec('auth_err_generique');
     }
   }
 
@@ -135,7 +135,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] connecterPatient: $e');
-      return AuthResultat.echec('Erreur: $e');
+      return AuthResultat.echec('auth_err_generique');
     }
   }
 
@@ -165,7 +165,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] connecterSoignant: $e');
-      return AuthResultat.echec('Erreur: $e');
+      return AuthResultat.echec('auth_err_generique');
     }
   }
 
@@ -189,7 +189,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] amorcerAdminDemo: $e');
-      return AuthResultat.echec('Erreur (amorçage admin): $e');
+      return AuthResultat.echec('auth_err_generique');
     }
   }
 
@@ -228,7 +228,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] creerUtilisateurSecondaire: $e');
-      return AuthResultat.echec('Erreur: $e');
+      return AuthResultat.echec('auth_err_generique');
     } finally {
       if (secondaire != null) {
         try {
@@ -277,9 +277,7 @@ class AuthService {
       case 'weak-password':
         return 'auth_err_faible';
       default:
-        // Diagnostic : on affiche le code brut à l'écran (clé i18n inconnue →
-        // t() renvoie la chaîne telle quelle).
-        return 'Firebase: ${e.code}';
+        return 'auth_err_generique';
     }
   }
 }
