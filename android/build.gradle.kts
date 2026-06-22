@@ -22,13 +22,17 @@ subprojects {
 // firebase_auth (et ses dépendances androidx) exigent compileSdk >= 34. Selon
 // la version de Flutter, le compileSdk de l'app ne se propage PAS aux modules
 // plugins (qui restent en android-33) → échec checkDebugAarMetadata. On force
-// donc compileSdk 34 sur tous les sous-projets Android.
+// donc compileSdk 34 sur les sous-projets plugins. On exclut ":app" : il définit
+// déjà compileSdk 34 et est déjà évalué ici (evaluationDependsOn ci-dessus),
+// donc y appeler afterEvaluate lèverait « project is already evaluated ».
 subprojects {
-    afterEvaluate {
-        extensions.findByType(com.android.build.gradle.BaseExtension::class.java)
-            ?.apply {
-                compileSdkVersion(34)
-            }
+    if (project.name != "app") {
+        afterEvaluate {
+            extensions.findByType(com.android.build.gradle.BaseExtension::class.java)
+                ?.apply {
+                    compileSdkVersion(34)
+                }
+        }
     }
 }
 
