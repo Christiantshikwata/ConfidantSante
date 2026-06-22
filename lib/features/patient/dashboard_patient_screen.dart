@@ -4,7 +4,10 @@ import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
 import '../../core/providers/langue_provider.dart';
+import '../../core/providers/messages_provider.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/session_service.dart';
+import '../../core/widgets/badge_non_lus.dart';
 import '../messagerie/messagerie_screen.dart';
 import 'agenda_screen.dart';
 import 'rappels_screen.dart';
@@ -30,7 +33,33 @@ class _DashboardPatientScreenState
     // Charge les données dès l'ouverture du dashboard
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PatientProvider>().chargerDonnees();
+      _demarrerMessages();
     });
+  }
+
+  // Démarre l'écoute temps réel de la conversation avec le médecin référent
+  // (notifications + badge de non-lus), sans backend.
+  Future<void> _demarrerMessages() async {
+    final numero = await SessionService().getNumero();
+    if (numero == null || numero.isEmpty) return;
+    final row = await DatabaseService().getPatient(numero);
+    final mat = (row?['soignant_matricule'] as String?)?.trim();
+    final nomMed = (row?['soignant'] as String?)?.trim();
+    final matricule = (mat != null && mat.isNotEmpty)
+        ? mat
+        : DatabaseService.soignantDemoMatricule;
+    final nom = (nomMed != null && nomMed.isNotEmpty)
+        ? nomMed
+        : 'Dr. Yves Ndetereyuwe';
+    final convId = MessagerieScreen.conversationIdPour(
+      patientNumero: numero,
+      soignantMatricule: matricule,
+    );
+    if (!mounted) return;
+    await context.read<MessagesProvider>().demarrer(
+      monId: numero,
+      conversations: {convId: nom},
+    );
   }
 
   @override
@@ -254,29 +283,48 @@ class _PageAccueil extends StatelessWidget {
                             const SizedBox(width: 12),
 
                             // Bouton messagerie — coin haut-droite, bien visible
-                            // (cercle blanc plein, icône contrastée).
+                            // (cercle blanc plein, icône contrastée) + badge.
                             GestureDetector(
                               onTap: () => _ouvrirMessagerie(context, patient),
-                              child: Container(
-                                width: 46, height: 46,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.15),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width: 46, height: 46,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.15),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.chat_bubble_rounded,
-                                    color: AppColors.primary,
-                                    size: 22,
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.chat_bubble_rounded,
+                                        color: AppColors.primary,
+                                        size: 22,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if (context
+                                          .watch<MessagesProvider>()
+                                          .totalNonLus >
+                                      0)
+                                    Positioned(
+                                      right: -2,
+                                      top: -2,
+                                      child: BadgeNonLus(
+                                        nombre: context
+                                            .watch<MessagesProvider>()
+                                            .totalNonLus,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ],

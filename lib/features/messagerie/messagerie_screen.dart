@@ -4,7 +4,9 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/providers/messages_provider.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/sync_service.dart';
 
@@ -54,14 +56,20 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
       .doc(widget.conversationId)
       .collection('messages');
 
+  MessagesProvider? _messagesProvider;
+
   @override
   void initState() {
     super.initState();
     if (!_useFirestore) _chargerLocaux();
+    // Marque la conversation comme active/lue (suspend ses notifications/badge).
+    _messagesProvider = context.read<MessagesProvider>();
+    _messagesProvider?.ouvrirConversation(widget.conversationId);
   }
 
   @override
   void dispose() {
+    _messagesProvider?.fermerConversation();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();

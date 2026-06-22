@@ -70,6 +70,35 @@ class NotificationService {
     );
   }
 
+  // Canal dédié aux messages de la messagerie.
+  AndroidNotificationDetails get _androidMessageDetails =>
+      const AndroidNotificationDetails(
+        'confidantsante_messages',
+        'Messages',
+        channelDescription: 'Nouveaux messages de la messagerie',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        color: Color(0xFF1565C0),
+        enableVibration: true,
+        playSound: true,
+      );
+
+  // Notification immédiate d'un nouveau message.
+  Future<void> afficherMessage({
+    required int id,
+    required String titre,
+    required String corps,
+  }) async {
+    await initialiser();
+    await _plugin.show(
+      id,
+      titre,
+      corps,
+      NotificationDetails(android: _androidMessageDetails),
+    );
+  }
+
   // Rappel quotidien programmé
   Future<void> programmerRappelQuotidien({
     required int id,

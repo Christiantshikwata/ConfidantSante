@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
+import '../../core/providers/messages_provider.dart';
 import '../../core/services/session_service.dart';
 import '../../core/services/auth_service.dart';
 import 'profile/parametres_screen.dart';
@@ -51,6 +52,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
             onPressed: () async {
               await AuthService().deconnecter();
               await SessionService().deconnecter();
+              await context.read<MessagesProvider>().arreter();
+              if (!context.mounted) return;
               context.read<PatientProvider>().reinitialiser();
               if (!mounted) return;
               Navigator.of(context).pushNamedAndRemoveUntil(

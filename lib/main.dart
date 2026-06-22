@@ -8,6 +8,7 @@ import 'core/services/database_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/providers/patient_provider.dart';
 import 'core/providers/langue_provider.dart';
+import 'core/providers/messages_provider.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/auth/role_screen.dart';
 import 'core/services/sync_service.dart';
@@ -54,6 +55,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: langueProvider),
         ChangeNotifierProvider(create: (_) => PatientProvider()),
+        ChangeNotifierProvider(create: (_) => MessagesProvider()),
       ],
       child: const ConfidantSanteApp(),
     ),

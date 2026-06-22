@@ -1,11 +1,14 @@
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/providers/messages_provider.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/session_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/sync_service.dart';
 import '../../core/services/report_service.dart';
+import '../../core/widgets/badge_non_lus.dart';
 import '../messagerie/messagerie_screen.dart';
 import 'ajouter_patient_screen.dart';
 import 'gerer_medecins_screen.dart';
@@ -22,6 +25,7 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
 
   int _pageActive = 0;
   String _nomSoignant = 'Dr.';
+  String _matricule = '';
   bool _estAdmin = false;
   List<Map<String, dynamic>> _patients = [];
   bool _isLoading = true;
@@ -67,9 +71,30 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
 
       setState(() {
         _nomSoignant = nom ?? 'Dr. Ndetereyuwe';
+        _matricule = matricule;
         _estAdmin = admin;
         _patients = patientsAvecObservance;
       });
+
+      // Démarre l'écoute temps réel des conversations de tous ses patients
+      // (notifications + badges de non-lus), sans backend.
+      if (matricule.isNotEmpty) {
+        final convs = <String, String>{};
+        for (final p in patientsAvecObservance) {
+          final numero = p['numero'] as String? ?? '';
+          if (numero.isEmpty) continue;
+          final convId = MessagerieScreen.conversationIdPour(
+            patientNumero: numero,
+            soignantMatricule: matricule,
+          );
+          convs[convId] = p['nom'] as String? ?? numero;
+        }
+        if (mounted) {
+          await context
+              .read<MessagesProvider>()
+              .demarrer(monId: matricule, conversations: convs);
+        }
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -110,6 +135,8 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
     if (ok != true) return;
     await AuthService().deconnecter();
     await SessionService().deconnecter();
+    if (!mounted) return;
+    await context.read<MessagesProvider>().arreter();
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil('/role', (route) => false);
   }
@@ -1623,36 +1650,70 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          final matricule =
-                              await SessionService().getSoignantMatricule() ??
-                                  DatabaseService.soignantDemoMatricule;
-                          final numero = patient['numero'] as String? ?? '';
-                          if (!context.mounted) return;
-                          Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => MessagerieScreen(
-                              conversationId:
-                                  MessagerieScreen.conversationIdPour(
-                                patientNumero: numero,
-                                soignantMatricule: matricule,
-                              ),
-                              monId: matricule,
-                              destinataireNom: patient['nom'] as String,
-                              role: 'soignant',
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              final matricule =
+                                  await SessionService().getSoignantMatricule() ??
+                                      DatabaseService.soignantDemoMatricule;
+                              final numero = patient['numero'] as String? ?? '';
+                              if (!context.mounted) return;
+                              Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => MessagerieScreen(
+                                  conversationId:
+                                      MessagerieScreen.conversationIdPour(
+                                    patientNumero: numero,
+                                    soignantMatricule: matricule,
+                                  ),
+                                  monId: matricule,
+                                  destinataireNom: patient['nom'] as String,
+                                  role: 'soignant',
+                                ),
+                              ));
+                            },
+                            icon: const Icon(Icons.message_outlined, size: 18),
+                            label: const Text('Message'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0288D1),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
                             ),
-                          ));
-                        },
-                        icon: const Icon(Icons.message_outlined, size: 18),
-                        label: const Text('Message'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0288D1),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
+                          ),
+                          if (context.watch<MessagesProvider>().nonLusPour(
+                                MessagerieScreen.conversationIdPour(
+                                  patientNumero:
+                                      patient['numero'] as String? ?? '',
+                                  soignantMatricule: _matricule.isNotEmpty
+                                      ? _matricule
+                                      : DatabaseService.soignantDemoMatricule,
+                                ),
+                              ) >
+                              0)
+                            Positioned(
+                              right: -4,
+                              top: -6,
+                              child: BadgeNonLus(
+                                nombre: context
+                                    .watch<MessagesProvider>()
+                                    .nonLusPour(
+                                      MessagerieScreen.conversationIdPour(
+                                        patientNumero:
+                                            patient['numero'] as String? ?? '',
+                                        soignantMatricule: _matricule.isNotEmpty
+                                            ? _matricule
+                                            : DatabaseService
+                                                .soignantDemoMatricule,
+                                      ),
+                                    ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 12),
