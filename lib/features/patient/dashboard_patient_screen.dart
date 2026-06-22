@@ -228,30 +228,6 @@ class _PageAccueil extends StatelessWidget {
                               ),
                             ),
 
-                            // Bouton messagerie (accès direct au soignant)
-                            GestureDetector(
-                              onTap: () => _ouvrirMessagerie(context, patient),
-                              child: Container(
-                                width: 42, height: 42,
-                                margin: const EdgeInsets.only(right: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.4),
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.chat_bubble_outline,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            ),
-
                             // Avatar avec vraies initiales
                             Container(
                               width: 42, height: 42,
@@ -270,6 +246,35 @@ class _PageAccueil extends StatelessWidget {
                                     color: Colors.white,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            // Bouton messagerie — coin haut-droite, bien visible
+                            // (cercle blanc plein, icône contrastée).
+                            GestureDetector(
+                              onTap: () => _ouvrirMessagerie(context, patient),
+                              child: Container(
+                                width: 46, height: 46,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.15),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.chat_bubble_rounded,
+                                    color: AppColors.primary,
+                                    size: 22,
                                   ),
                                 ),
                               ),

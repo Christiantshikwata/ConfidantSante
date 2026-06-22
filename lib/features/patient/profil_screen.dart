@@ -7,12 +7,8 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
-import '../../core/providers/langue_provider.dart';
 import '../../core/services/session_service.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/services/database_service.dart';
-import '../auth/mot_de_passe_screen.dart';
-import '../messagerie/messagerie_screen.dart';
 import 'profile/parametres_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
@@ -30,45 +26,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const ParametresScreen()),
-    );
-  }
-
-  void _changerLangue() {
-    final lang = context.read<LangueProvider>();
-    final t = AppTranslations.t;
-
-    final langues = [
-      {'code': 'fr', 'label': t('francais'), 'flag': '🇫🇷', 'native': 'Français'},
-      {'code': 'en', 'label': t('anglais'),  'flag': '🇬🇧', 'native': 'English'},
-      {'code': 'sw', 'label': t('swahili'),  'flag': '🇨🇩', 'native': 'Kiswahili'},
-    ];
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(t('choisir_langue_titre')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: langues.map((l) {
-            final selectionne = lang.code == l['code'];
-            return ListTile(
-              leading: Text(l['flag']!, style: const TextStyle(fontSize: 22)),
-              title: Text(l['label']!),
-              subtitle: Text(l['native']!,
-                  style: const TextStyle(fontSize: 12)),
-              trailing: selectionne
-                  ? const Icon(Icons.check_circle_rounded,
-                  color: AppColors.primary)
-                  : null,
-              onTap: () {
-                lang.changerLangue(l['code']!);
-                Navigator.pop(context);
-              },
-            );
-          }).toList(),
-        ),
-      ),
     );
   }
 
@@ -497,108 +454,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
                 const SizedBox(height: 24),
 
-                // Paramètres
-                _TitreSec(t('parametres')),
-                const SizedBox(height: 12),
-
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE0E7EF)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      _OptionParametre(
-                        icone: Icons.language_outlined,
-                        couleurIcone: AppColors.primary,
-                        fond: AppColors.primaryPale,
-                        label: t('changer_langue'),
-                        valeur: context.watch<LangueProvider>().code == 'fr'
-                            ? 'Français'
-                            : context.watch<LangueProvider>().code == 'en'
-                            ? 'English'
-                            : 'Kiswahili',
-                        onTap: _changerLangue,
-                        dernier: false,
-                      ),
-                      _OptionParametre(
-                        icone: Icons.chat_bubble_outline,
-                        couleurIcone: const Color(0xFF0288D1),
-                        fond: const Color(0xFFE3F2FD),
-                        label: 'Contacter mon soignant',
-                        onTap: () async {
-                          final numero = patient.numero;
-                          if (numero.isEmpty) return;
-                          final row =
-                              await DatabaseService().getPatient(numero);
-                          final mat =
-                              (row?['soignant_matricule'] as String?)?.trim();
-                          final nomMed =
-                              (row?['soignant'] as String?)?.trim();
-                          final matricule = (mat != null && mat.isNotEmpty)
-                              ? mat
-                              : DatabaseService.soignantDemoMatricule;
-                          final destinataire =
-                              (nomMed != null && nomMed.isNotEmpty)
-                                  ? nomMed
-                                  : 'Dr. Yves Ndetereyuwe';
-                          if (!context.mounted) return;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MessagerieScreen(
-                                conversationId:
-                                    MessagerieScreen.conversationIdPour(
-                                  patientNumero: numero,
-                                  soignantMatricule: matricule,
-                                ),
-                                monId: numero,
-                                destinataireNom: destinataire,
-                                role: 'patient',
-                              ),
-                            ),
-                          );
-                        },
-                        dernier: false,
-                      ),
-                      _OptionParametre(
-                        icone: Icons.shield_outlined,
-                        couleurIcone: const Color(0xFF263238),
-                        fond: const Color(0xFFECEFF1),
-                        label: t('discretion'),
-                        valeur: 'Configuré',
-                        onTap: () {},
-                        dernier: false,
-                      ),
-                      _OptionParametre(
-                        icone: Icons.lock_outline,
-                        couleurIcone: AppColors.success,
-                        fond: const Color(0xFFE8F5E9),
-                        label: t('changer_pin'),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const PinScreen(),
-                            ),
-                          );
-                        },
-                        dernier: true,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
                 // Bouton déconnexion
                 SizedBox(
                   width: double.infinity,
@@ -693,68 +548,6 @@ class _LigneInfo extends StatelessWidget {
               color: AppColors.textPrimary,
             )),
       ],
-    ),
-  );
-}
-
-class _OptionParametre extends StatelessWidget {
-  final IconData icone;
-  final Color couleurIcone, fond;
-  final String label;
-  final String? valeur;
-  final VoidCallback onTap;
-  final bool dernier;
-
-  const _OptionParametre({
-    required this.icone,
-    required this.couleurIcone,
-    required this.fond,
-    required this.label,
-    this.valeur,
-    required this.onTap,
-    required this.dernier,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        border: dernier
-            ? null
-            : const Border(
-            bottom:
-            BorderSide(color: Color(0xFFF0F4F8), width: 1)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              color: fond,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icone, size: 18, color: couleurIcone),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(label,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary,
-                )),
-          ),
-          if (valeur != null)
-            Text(valeur!,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
-          const SizedBox(width: 6),
-          const Icon(Icons.chevron_right,
-              size: 18, color: AppColors.textSecondary),
-        ],
-      ),
     ),
   );
 }

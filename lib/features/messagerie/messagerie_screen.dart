@@ -329,7 +329,10 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
         left: 16,
         right: 16,
         top: 12,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+        // Le Scaffold (resizeToAvoidBottomInset) remonte déjà le corps au-dessus
+        // du clavier : on ne rajoute donc PAS viewInsets.bottom (sinon double
+        // comptage → « Bottom overflowed »). On garde seulement la safe-area.
+        bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
