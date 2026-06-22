@@ -136,7 +136,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] connecterSoignant: $e');
-      return AuthResultat.echec('auth_err_generique');
+      return AuthResultat.echec('Erreur: $e');
     }
   }
 
@@ -164,7 +164,7 @@ class AuthService {
       return AuthResultat.echec(_cleErreur(e));
     } catch (e) {
       debugPrint('[AuthService] amorcerAdminDemo: $e');
-      return AuthResultat.echec('auth_err_generique');
+      return AuthResultat.echec('Erreur (amorçage admin): $e');
     }
   }
 
@@ -261,7 +261,9 @@ class AuthService {
       case 'weak-password':
         return 'auth_err_faible';
       default:
-        return 'auth_err_generique';
+        // Diagnostic : on affiche le code brut à l'écran (clé i18n inconnue →
+        // t() renvoie la chaîne telle quelle).
+        return 'Firebase: ${e.code}';
     }
   }
 }
