@@ -18,9 +18,7 @@ dependencies:
   firebase_auth: ^4.16.0
 
   # Base de données locale offline
-  # Épinglé en 2.3.x : sqflite_android 2.4.x exige JDK 19+ et compileSdk 36
-  # (Build.VERSION_CODES.BAKLAVA, Locale.of, Thread.threadId).
-  sqflite: 2.3.3+1
+  sqflite: ^2.3.0
   path: ^1.8.3
 
   # Notifications locales
@@ -50,6 +48,13 @@ dependencies:
   excel: ^4.0.0
   path_provider: ^2.1.0
   share_plus: ^10.0.0
+
+# sqflite_android 2.4.2+ référence Build.VERSION_CODES.BAKLAVA (API 36),
+# Locale.of(...) et Thread.threadId() → exige JDK 21 / compileSdk 36. On force
+# 2.4.1 : structure de plugin moderne (compatible AGP 8.x), mais sans ces APIs,
+# donc compatible avec le toolchain actuel (JDK 17 / compileSdk 34).
+dependency_overrides:
+  sqflite_android: 2.4.1
 
 dev_dependencies:
   flutter_test:
