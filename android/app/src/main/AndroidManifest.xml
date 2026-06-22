@@ -13,13 +13,10 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- ═══════════════════════════════════════════════════════════
-             ACTIVITÉ PRINCIPALE — icône normale ConfidantSanté
-             Désactivée par défaut quand le camouflage est actif
-        ════════════════════════════════════════════════════════════ -->
+        <!-- Activité principale (lanceur standard) -->
         <activity
             android:name=".MainActivity"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
@@ -29,87 +26,11 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
         </activity>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             ALIAS 1 — Icône normale (activé par défaut)
-        ════════════════════════════════════════════════════════════ -->
-        <activity-alias
-            android:name=".MainActivityDefault"
-            android:enabled="true"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="ConfidantSanté"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             ALIAS 2 — Camouflage Calculatrice
-        ════════════════════════════════════════════════════════════ -->
-        <activity-alias
-            android:name=".MainActivityCalculatrice"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_calculatrice"
-            android:label="Calculatrice"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             ALIAS 3 — Camouflage Météo
-        ════════════════════════════════════════════════════════════ -->
-        <activity-alias
-            android:name=".MainActivityMeteo"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_meteo"
-            android:label="Météo"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             ALIAS 4 — Camouflage Notes
-        ════════════════════════════════════════════════════════════ -->
-        <activity-alias
-            android:name=".MainActivityNotes"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_notes"
-            android:label="Notes"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             ALIAS 5 — Camouflage Minuteur
-        ════════════════════════════════════════════════════════════ -->
-        <activity-alias
-            android:name=".MainActivityMinuteur"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_minuteur"
-            android:label="Minuteur"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
 
         <!-- Notifications -->
         <meta-data android:name="flutterEmbedding" android:value="2"/>
