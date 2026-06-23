@@ -25,7 +25,6 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
 
   int _pageActive = 0;
   String _nomSoignant = 'Dr.';
-  String _matricule = '';
   bool _estAdmin = false;
   List<Map<String, dynamic>> _patients = [];
   bool _isLoading = true;
@@ -71,7 +70,6 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
 
       setState(() {
         _nomSoignant = nom ?? 'Dr. Ndetereyuwe';
-        _matricule = matricule;
         _estAdmin = admin;
         _patients = patientsAvecObservance;
       });
@@ -1182,6 +1180,7 @@ class DossierPatientScreen extends StatefulWidget {
 class _DossierPatientScreenState extends State<DossierPatientScreen> {
   List<Map<String, dynamic>> _historique = [];
   List<Map<String, dynamic>> _traitements = [];
+  String _matricule = '';
 
   @override
   void initState() {
@@ -1191,9 +1190,12 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
 
   Future<void> _charger() async {
     final id = widget.patient['id'] as int;
+    final mat = await SessionService().getSoignantMatricule();
     final hist = await DatabaseService().getHistorique30j(id);
     final trait = await DatabaseService().getTraitements(id);
+    if (!mounted) return;
     setState(() {
+      _matricule = mat ?? '';
       _historique = hist;
       _traitements = trait;
     });
