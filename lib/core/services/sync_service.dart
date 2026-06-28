@@ -16,8 +16,16 @@ class SyncService {
 
   bool _syncEnCours = false;
 
+  /// État de connexion réseau réel, observable par l'UI (badge « hors ligne »).
+  final ValueNotifier<bool> enLigne = ValueNotifier<bool>(true);
+
   /// Vrai si une app Firebase a été initialisée (sinon on reste 100% local).
   bool get firebaseDisponible => Firebase.apps.isNotEmpty;
+
+  /// Met à jour [enLigne] selon l'état réseau courant.
+  Future<void> rafraichirEtatConnexion() async {
+    enLigne.value = await _isConnecte();
+  }
 
   // ── Vérifie si internet est disponible (connectivity_plus 6.x → List) ──────
   Future<bool> _isConnecte() async {
@@ -255,10 +263,13 @@ class SyncService {
   // ── Écoute la connectivité et sync automatiquement ────────────────────────
   /// À appeler une fois dans main.dart ou après le login.
   void ecouterConnectivite() {
-    if (!firebaseDisponible) return;
+    // Initialise l'état courant puis suit les changements (même sans Firebase :
+    // le badge « hors ligne » doit rester juste).
+    rafraichirEtatConnexion();
     Connectivity().onConnectivityChanged.listen((results) {
       final connecte = results.any((r) => r != ConnectivityResult.none);
-      if (connecte) {
+      enLigne.value = connecte;
+      if (connecte && firebaseDisponible) {
         debugPrint('[SyncService] Connexion détectée → synchronisation auto');
         synchroniser();
       }

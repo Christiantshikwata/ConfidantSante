@@ -26,6 +26,9 @@ class PatientProvider extends ChangeNotifier {
   // Ids des rappels déjà pris aujourd'hui
   Set<int> _prisAujourdhui = {};
 
+  // Indique qu'un chargement des données est en cours (spinner UI).
+  bool _chargement = false;
+
   // Getters
   int?    get patientId   => _patientId;
   String  get nom         => _nom;
@@ -38,12 +41,24 @@ class PatientProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get historique  => _historique;
   List<Map<String, dynamic>> get protocolesAConfigurer => _protocoles;
   Set<int> get prisAujourdhui => _prisAujourdhui;
+  bool get chargement => _chargement;
 
   /// Indique si un rappel a déjà été marqué pris aujourd'hui.
   bool estPrisAujourdhui(int rappelId) => _prisAujourdhui.contains(rappelId);
 
   // Charge toutes les données du patient depuis SQLite
   Future<void> chargerDonnees() async {
+    _chargement = true;
+    notifyListeners();
+    try {
+      await _chargerDonneesInterne();
+    } finally {
+      _chargement = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _chargerDonneesInterne() async {
     final idStr = await SessionService().getPatientId();
     final nom   = await SessionService().getNom();
     final num   = await SessionService().getNumero();

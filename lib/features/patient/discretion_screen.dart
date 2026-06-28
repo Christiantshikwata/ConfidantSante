@@ -149,7 +149,7 @@ class _DiscretionScreenState extends State<DiscretionScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Icône changée → ${_apparences.firstWhere((a) => a.id == nouvelleApparence).nom}'),
+            content: Text('${AppTranslations.t('icone_changee')} → ${_apparences.firstWhere((a) => a.id == nouvelleApparence).nom}'),
             backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(

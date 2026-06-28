@@ -6,6 +6,20 @@ class AppTranslations {
     'fr': {
       // Général / app
       'app_nom':           'ConfidantSanté',
+      // Lot 1 — divers UX
+      'voir_agenda':       'Voir l\'agenda',
+      'pris_court':        'pris',
+      'supprime':          'supprimé',
+      'rappel_programme':  'Rappel programmé',
+      'icone_changee':     'Icône changée',
+      'aujourdhui':        'Aujourd\'hui',
+      'jour_lun':          'Lundi',
+      'jour_mar':          'Mardi',
+      'jour_mer':          'Mercredi',
+      'jour_jeu':          'Jeudi',
+      'jour_ven':          'Vendredi',
+      'jour_sam':          'Samedi',
+      'jour_dim':          'Dimanche',
       'app_slogan':        'Votre santé, en toute discrétion',
       'continuer':         'Continuer',
       'annuler':           'Annuler',
@@ -176,6 +190,20 @@ class AppTranslations {
     // ── ENGLISH ──────────────────────────────────────────────────
     'en': {
       'app_nom':           'ConfidantHealth',
+      // Lot 1 — divers UX
+      'voir_agenda':       'View calendar',
+      'pris_court':        'taken',
+      'supprime':          'deleted',
+      'rappel_programme':  'Reminder set',
+      'icone_changee':     'Icon changed',
+      'aujourdhui':        'Today',
+      'jour_lun':          'Monday',
+      'jour_mar':          'Tuesday',
+      'jour_mer':          'Wednesday',
+      'jour_jeu':          'Thursday',
+      'jour_ven':          'Friday',
+      'jour_sam':          'Saturday',
+      'jour_dim':          'Sunday',
       'app_slogan':        'Your health, in complete privacy',
       'continuer':         'Continue',
       'annuler':           'Cancel',
@@ -335,6 +363,20 @@ class AppTranslations {
     // ── KISWAHILI ────────────────────────────────────────────────
     'sw': {
       'app_nom':           'ConfidantAfya',
+      // Lot 1 — divers UX
+      'voir_agenda':       'Ona kalenda',
+      'pris_court':        'imekunywa',
+      'supprime':          'imefutwa',
+      'rappel_programme':  'Kikumbusho kimewekwa',
+      'icone_changee':     'Aikoni imebadilishwa',
+      'aujourdhui':        'Leo',
+      'jour_lun':          'Jumatatu',
+      'jour_mar':          'Jumanne',
+      'jour_mer':          'Jumatano',
+      'jour_jeu':          'Alhamisi',
+      'jour_ven':          'Ijumaa',
+      'jour_sam':          'Jumamosi',
+      'jour_dim':          'Jumapili',
       'app_slogan':        'Afya yako, kwa siri kamili',
       'continuer':         'Endelea',
       'annuler':           'Ghairi',

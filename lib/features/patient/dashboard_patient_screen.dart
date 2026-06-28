@@ -197,7 +197,18 @@ class _PageAccueil extends StatelessWidget {
             .toUpperCase()
             : 'CS';
 
-        return CustomScrollView(
+        if (patient.chargement && patient.nom.isEmpty) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
+
+        return RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () =>
+              context.read<PatientProvider>().chargerDonnees(),
+          child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
 
             // En-tête dégradé
@@ -463,7 +474,7 @@ class _PageAccueil extends StatelessWidget {
                               builder: (_) => const AgendaScreen()),
                         ),
                         child: Text(
-                          'Voir l\'agenda',
+                          t('voir_agenda'),
                           style: TextStyle(
                             fontSize: 13,
                             color: AppColors.primary,
@@ -525,6 +536,7 @@ class _PageAccueil extends StatelessWidget {
             ),
 
           ],
+          ),
         );
       },
     );
@@ -622,7 +634,8 @@ class _CarteMedicamentSQLite extends StatelessWidget {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('✓ ${rappel['nom_medicament']} pris'),
+                          content: Text(
+                              '✓ ${rappel['nom_medicament']} ${AppTranslations.t('pris_court')}'),
                           backgroundColor: AppColors.success,
                           duration: const Duration(seconds: 2),
                           behavior: SnackBarBehavior.floating,

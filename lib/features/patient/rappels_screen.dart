@@ -6,6 +6,7 @@ import '../../core/providers/patient_provider.dart';
 import '../../core/providers/langue_provider.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/sync_service.dart';
 
 class RappelsScreen extends StatefulWidget {
   const RappelsScreen({super.key});
@@ -257,7 +258,11 @@ class _OngletAujourdhui extends StatelessWidget {
       parHeure.putIfAbsent(h, () => []).add(r);
     }
 
-    return ListView(
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: () => context.read<PatientProvider>().chargerDonnees(),
+      child: ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(20),
       children: [
 
@@ -283,35 +288,41 @@ class _OngletAujourdhui extends StatelessWidget {
           const SizedBox(height: 20),
         ],
 
-        // Badge offline
-        Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 10,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.primaryPale,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.cloud_off_outlined,
-                size: 14, color: AppColors.primary,
+        // Badge offline — affiché uniquement hors connexion (état réseau réel)
+        ValueListenableBuilder<bool>(
+          valueListenable: SyncService().enLigne,
+          builder: (_, enLigne, __) {
+            if (enLigne) return const SizedBox.shrink();
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 10,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  t('mode_hors_ligne'),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w500,
+              decoration: BoxDecoration(
+                color: AppColors.primaryPale,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.cloud_off_outlined,
+                    size: 14, color: AppColors.primary,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      t('mode_hors_ligne'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
 
         // Rappels groupés par heure
@@ -374,6 +385,7 @@ class _OngletAujourdhui extends StatelessWidget {
         }),
 
       ],
+      ),
     );
   }
 }
@@ -410,7 +422,7 @@ class _CarteProtocole extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Rappel programmé à $heure pour ${protocole['nom_medicament']}',
+            '${AppTranslations.t('rappel_programme')} • $heure • ${protocole['nom_medicament']}',
           ),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
@@ -525,7 +537,7 @@ class _CarteRappel extends StatelessWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${rappel['nom_medicament']} supprimé',
+                '${rappel['nom_medicament']} ${AppTranslations.t('supprime')}',
               ),
               backgroundColor: AppColors.danger,
               behavior: SnackBarBehavior.floating,
@@ -617,7 +629,7 @@ class _CarteRappel extends StatelessWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              '✓ ${rappel['nom_medicament']} pris',
+                              '✓ ${rappel['nom_medicament']} ${AppTranslations.t('pris_court')}',
                             ),
                             backgroundColor: AppColors.success,
                             duration: const Duration(seconds: 2),
@@ -944,9 +956,10 @@ class _OngletSemaine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTranslations.t;
     final jours = [
-      'Lundi', 'Mardi', 'Mercredi', 'Jeudi',
-      'Vendredi', 'Samedi', 'Dimanche',
+      t('jour_lun'), t('jour_mar'), t('jour_mer'), t('jour_jeu'),
+      t('jour_ven'), t('jour_sam'), t('jour_dim'),
     ];
     final aujourd = DateTime.now().weekday - 1;
 
@@ -990,9 +1003,9 @@ class _OngletSemaine extends StatelessWidget {
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text(
-                    "Aujourd'hui",
-                    style: TextStyle(
+                  child: Text(
+                    t('aujourdhui'),
+                    style: const TextStyle(
                       fontSize: 11,
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
