@@ -21,85 +21,18 @@ class LoginPatientScreen extends StatefulWidget {
 class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
   final TextEditingController _numeroController  = TextEditingController();
-  final TextEditingController _nomController     = TextEditingController();
   final TextEditingController _mdpController     = TextEditingController();
   final GlobalKey<FormState>  _formKey           = GlobalKey<FormState>();
 
   bool _enChargement   = false;
   bool _mdpVisible     = false;
-  bool _premiereVisite = true;
   String? _erreur;
 
   @override
   void dispose() {
     _numeroController.dispose();
-    _nomController.dispose();
     _mdpController.dispose();
     super.dispose();
-  }
-
-  // ── INSCRIPTION ───────────────────────────────────────────────────────────
-  Future<void> _inscrire() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _enChargement = true;
-      _erreur = null;
-    });
-
-    final numero = _numeroController.text.trim();
-    final nom = _nomController.text.trim();
-
-    // Crée le compte Firebase Auth + le profil Firestore.
-    final res = await AuthService().inscrirePatient(
-      numero: numero,
-      motDePasse: _mdpController.text,
-      nom: nom,
-    );
-    if (!mounted) return;
-    if (!res.succes) {
-      setState(() {
-        _enChargement = false;
-        _erreur = AppTranslations.t(res.messageCle ?? 'auth_err_generique');
-      });
-      return;
-    }
-
-    // Crée la fiche locale (source des données hors-ligne).
-    var id = await DatabaseService().creerPatient(
-      nom: nom,
-      numero: numero,
-      motDePasse: _mdpController.text,
-    );
-    if (id <= 0) {
-      final existant = await DatabaseService().getPatient(numero);
-      id = (existant?['id'] as int?) ?? 0;
-    }
-
-    if (!mounted) return;
-
-    if (id > 0) {
-      // Sauvegarde la session
-      await SessionService().sauvegarderSession(
-        patientId: id.toString(),
-        nom: nom,
-        numero: numero,
-      );
-
-      setState(() => _enChargement = false);
-
-      // Va créer le PIN
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const PinScreen(),
-        ),
-      );
-    } else {
-      setState(() {
-        _enChargement = false;
-        _erreur = AppTranslations.t('erreur_creation');
-      });
-    }
   }
 
   // ── CONNEXION ─────────────────────────────────────────────────────────────
@@ -242,9 +175,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                     const SizedBox(height: 16),
 
                     Text(
-                      _premiereVisite
-                          ? t('creer_un_compte')
-                          : t('connexion_patient'),
+                      t('connexion_patient'),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -255,9 +186,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                     const SizedBox(height: 6),
 
                     Text(
-                      _premiereVisite
-                          ? t('sous_titre_inscription')
-                          : t('sous_titre_connexion'),
+                      t('sous_titre_connexion'),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 14,
@@ -282,55 +211,6 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                   children: [
 
                     const SizedBox(height: 8),
-
-                    // Toggle inscription / connexion
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryPale,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          _toggleBtn(
-                            t('nouveau_compte'),
-                            _premiereVisite,
-                                () => setState(() {
-                              _premiereVisite = true;
-                              _erreur = null;
-                            }),
-                          ),
-                          _toggleBtn(
-                            t('se_connecter'),
-                            !_premiereVisite,
-                                () => setState(() {
-                              _premiereVisite = false;
-                              _erreur = null;
-                            }),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Champ nom (inscription seulement)
-                    if (_premiereVisite) ...[
-                      _labelChamp(t('nom_complet')),
-                      const SizedBox(height: 8),
-                      _champTexte(
-                        controller: _nomController,
-                        hint: t('hint_nom'),
-                        icone: Icons.person_outline,
-                        validator: (v) {
-                          if (_premiereVisite &&
-                              (v == null || v.isEmpty)) {
-                            return t('erreur_nom');
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                    ],
 
                     // Champ numéro
                     _labelChamp(t('numero_telephone')),
@@ -419,9 +299,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
 
                     // Champ mot de passe
                     _labelChamp(
-                      _premiereVisite
-                          ? t('creer_mot_de_passe')
-                          : t('mot_de_passe'),
+                      t('mot_de_passe'),
                     ),
                     const SizedBox(height: 8),
 
@@ -433,9 +311,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                         color: AppColors.textPrimary,
                       ),
                       decoration: InputDecoration(
-                        hintText: _premiereVisite
-                            ? t('hint_mdp_creer')
-                            : t('hint_mdp'),
+                        hintText: t('hint_mdp'),
                         hintStyle: const TextStyle(
                           color: Color(0xFFB0BEC5),
                           fontSize: 14,
@@ -542,7 +418,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                       child: ElevatedButton(
                         onPressed: _enChargement
                             ? null
-                            : (_premiereVisite ? _inscrire : _connecter),
+                            : _connecter,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -560,9 +436,7 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
                           ),
                         )
                             : Text(
-                          _premiereVisite
-                              ? t('creer_compte')
-                              : t('se_connecter'),
+                          t('se_connecter'),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -641,36 +515,6 @@ class _LoginPatientScreenState extends State<LoginPatientScreen> {
     );
   }
 
-  Widget _toggleBtn(
-      String label,
-      bool actif,
-      VoidCallback onTap,
-      ) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.all(4),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: actif ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: actif ? Colors.white : AppColors.textSecondary,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ── ÉCRAN VÉRIFICATION PIN ───────────────────────────────────────────────────
