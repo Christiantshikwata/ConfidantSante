@@ -105,21 +105,23 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
 
         // Attribue le protocole : l'heure sera choisie par le patient.
         final tid = await DatabaseService().assignerProtocole(
-          patientId:     id,
-          nomMedicament: _protocoleChoisi,
-          dosage:        '1 comprimé/jour',
-          dureeMois:     _dureeMois,
+          patientId:         id,
+          nomMedicament:     _protocoleChoisi,
+          dosage:            '1 comprimé/jour',
+          dureeMois:         _dureeMois,
+          soignantMatricule: matricule,
         );
         final row = await DatabaseService().getTraitementParId(tid);
         if (row != null) {
           await SyncService().pousserProtocole(
-            numero:        numero,
-            idLocal:       tid.toString(),
-            nomMedicament: row['nom_medicament'] as String? ?? '',
-            dosage:        row['dosage'] as String? ?? '',
-            dateDebut:     row['date_debut'] as String?,
-            dateFin:       row['date_fin'] as String?,
-            dureeMois:     row['duree_mois'] as int?,
+            numero:            numero,
+            idLocal:           tid.toString(),
+            nomMedicament:     row['nom_medicament'] as String? ?? '',
+            dosage:            row['dosage'] as String? ?? '',
+            dateDebut:         row['date_debut'] as String?,
+            dateFin:           row['date_fin'] as String?,
+            dureeMois:         row['duree_mois'] as int?,
+            soignantMatricule: matricule,
           );
         }
 

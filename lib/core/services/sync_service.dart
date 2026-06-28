@@ -62,7 +62,9 @@ class SyncService {
       await _syncProfil(patientId, numero);
       total += await _syncPrises(patientId, numero);
       total += await _syncRappels(patientId, numero);
-      total += await _syncRendezVous(patientId, numero);
+      // Les rendez-vous sont désormais fixés par le médecin : le patient les
+      // récupère (pull) au lieu de les pousser.
+      total += await pullRendezVous(numero, patientId);
 
       debugPrint('[SyncService] ✓ $total éléments synchronisés');
 
@@ -188,32 +190,64 @@ class SyncService {
     return count;
   }
 
-  // ── 4. Rendez-vous ────────────────────────────────────────────────────────
-  Future<int> _syncRendezVous(int patientId, String numero) async {
+  // ── 4. Rendez-vous (médecin → Firestore → patient) ─────────────────────────
+
+  /// Médecin : pousse vers Firestore un rendez-vous fixé pour un patient.
+  Future<void> pousserRendezVous({
+    required String numero,
+    required String idLocal,
+    required String motif,
+    required String lieu,
+    required String date,
+    String? statut,
+    String? soignantMatricule,
+  }) async {
+    if (!firebaseDisponible) return;
+    try {
+      await _firestore
+          .collection('patients')
+          .doc(numero)
+          .collection('rendez_vous')
+          .doc(idLocal)
+          .set({
+        'motif':              motif,
+        'lieu':               lieu,
+        'date':               date,
+        'statut':             statut ?? 'planifie',
+        'soignant_matricule': soignantMatricule,
+        'cree_le':            FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pousserRendezVous : $e');
+    }
+  }
+
+  /// Patient : récupère depuis Firestore les rendez-vous fixés par le médecin
+  /// et les enregistre localement (sans doublon). Retourne le nombre traité.
+  Future<int> pullRendezVous(String numero, int patientId) async {
+    if (!firebaseDisponible) return 0;
     int count = 0;
     try {
-      final rdvs = await DatabaseService().getRendezVous(patientId);
-      if (rdvs.isEmpty) return 0;
-
-      for (final rdv in rdvs) {
-        await _firestore
-            .collection('patients')
-            .doc(numero)
-            .collection('rendez_vous')
-            .doc(rdv['id'].toString())
-            .set({
-          'motif':   rdv['motif'],
-          'lieu':    rdv['lieu'],
-          'date':    rdv['date'],
-          'statut':  rdv['statut'],
-          'sync_at': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      final snap = await _firestore
+          .collection('patients')
+          .doc(numero)
+          .collection('rendez_vous')
+          .get();
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        await DatabaseService().upsertRendezVousDepuisFirestore(
+          patientId:         patientId,
+          remoteId:          doc.id,
+          motif:             d['motif'] as String? ?? '',
+          lieu:              d['lieu'] as String? ?? '',
+          date:              d['date'] as String? ?? '',
+          statut:            d['statut'] as String?,
+          soignantMatricule: d['soignant_matricule'] as String?,
+        );
         count++;
       }
-
-      debugPrint('[SyncService] $count rendez-vous synchronisé(s)');
     } catch (e) {
-      debugPrint('[SyncService] Erreur rendez-vous : $e');
+      debugPrint('[SyncService] Erreur pullRendezVous : $e');
     }
     return count;
   }
@@ -363,6 +397,7 @@ class SyncService {
     String? dateDebut,
     String? dateFin,
     int? dureeMois,
+    String? soignantMatricule,
   }) async {
     if (!firebaseDisponible) return;
     try {
@@ -372,12 +407,13 @@ class SyncService {
           .collection('traitements')
           .doc(idLocal)
           .set({
-        'nom_medicament': nomMedicament,
-        'dosage':         dosage,
-        'date_debut':     dateDebut,
-        'date_fin':       dateFin,
-        'duree_mois':     dureeMois,
-        'created_at':     FieldValue.serverTimestamp(),
+        'nom_medicament':     nomMedicament,
+        'dosage':             dosage,
+        'date_debut':         dateDebut,
+        'date_fin':           dateFin,
+        'duree_mois':         dureeMois,
+        'soignant_matricule': soignantMatricule,
+        'created_at':         FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('[SyncService] Erreur pousserProtocole : $e');

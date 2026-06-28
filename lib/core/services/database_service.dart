@@ -27,7 +27,7 @@ class DatabaseService {
     return await openDatabase(
       cheminComplet,
       onCreate: _creerTables,
-      version: 8,
+      version: 9,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _creerTableRendezVous(db);
@@ -73,8 +73,29 @@ class DatabaseService {
           await db.execute(
               "ALTER TABLE patients ADD COLUMN soignant_matricule TEXT");
         }
+        if (oldVersion < 9) {
+          // Logique hospitalière : le médecin prescrit le traitement et fixe le
+          // rendez-vous. On rattache donc ces deux objets au matricule du
+          // soignant ; remote_id permet de dédupliquer les RDV synchronisés.
+          await _ajouterColonneSiAbsente(
+              db, 'traitements', 'soignant_matricule', 'TEXT');
+          await _ajouterColonneSiAbsente(
+              db, 'rendez_vous', 'soignant_matricule', 'TEXT');
+          await _ajouterColonneSiAbsente(
+              db, 'rendez_vous', 'remote_id', 'TEXT');
+        }
       },
     );
+  }
+
+  // Ajoute une colonne uniquement si elle n'existe pas déjà (migration sûre).
+  Future<void> _ajouterColonneSiAbsente(
+      Database db, String table, String colonne, String type) async {
+    final infos = await db.rawQuery('PRAGMA table_info($table)');
+    final existe = infos.any((c) => c['name'] == colonne);
+    if (!existe) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $colonne $type');
+    }
   }
 
   // Crée toutes les tables au premier lancement
@@ -108,6 +129,7 @@ class DatabaseService {
         date_fin TEXT,
         duree_mois INTEGER,
         remote_id TEXT,
+        soignant_matricule TEXT,
         FOREIGN KEY (patient_id) REFERENCES patients(id)
       )
     ''');
@@ -151,12 +173,14 @@ class DatabaseService {
   Future<void> _creerTableRendezVous(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS rendez_vous (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id  INTEGER NOT NULL,
-        motif       TEXT    NOT NULL,
-        lieu        TEXT    DEFAULT '',
-        date        TEXT    NOT NULL,
-        statut      TEXT    DEFAULT 'planifie',
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id         INTEGER NOT NULL,
+        motif              TEXT    NOT NULL,
+        lieu               TEXT    DEFAULT '',
+        date               TEXT    NOT NULL,
+        statut             TEXT    DEFAULT 'planifie',
+        soignant_matricule TEXT,
+        remote_id          TEXT,
         FOREIGN KEY (patient_id) REFERENCES patients(id)
       )
     ''');
@@ -526,19 +550,67 @@ class DatabaseService {
     return res.isNotEmpty ? res.first : null;
   }
 
+  /// Médecin : fixe un rendez-vous pour un patient. Le matricule du soignant
+  /// auteur du rendez-vous est conservé (logique hospitalière : un rendez-vous
+  /// lie le patient ET le médecin).
   Future<int> ajouterRendezVous({
     required int patientId,
     required String motif,
     required String lieu,
     required String date,
+    String? soignantMatricule,
   }) async {
     final db = await database;
     return await db.insert('rendez_vous', {
-      'patient_id': patientId,
-      'motif':      motif,
-      'lieu':       lieu,
-      'date':       date,
-      'statut':     'planifie',
+      'patient_id':         patientId,
+      'motif':              motif,
+      'lieu':               lieu,
+      'date':               date,
+      'statut':             'planifie',
+      'soignant_matricule': soignantMatricule,
+    });
+  }
+
+  /// Patient : insère un rendez-vous reçu de Firestore s'il n'existe pas déjà
+  /// localement (déduplication par remote_id).
+  Future<void> upsertRendezVousDepuisFirestore({
+    required int patientId,
+    required String remoteId,
+    required String motif,
+    required String lieu,
+    required String date,
+    String? statut,
+    String? soignantMatricule,
+  }) async {
+    final db = await database;
+    final existant = await db.query(
+      'rendez_vous',
+      where: 'patient_id = ? AND remote_id = ?',
+      whereArgs: [patientId, remoteId],
+      limit: 1,
+    );
+    if (existant.isNotEmpty) {
+      await db.update(
+        'rendez_vous',
+        {
+          'motif':  motif,
+          'lieu':   lieu,
+          'date':   date,
+          'statut': statut ?? 'planifie',
+        },
+        where: 'patient_id = ? AND remote_id = ?',
+        whereArgs: [patientId, remoteId],
+      );
+      return;
+    }
+    await db.insert('rendez_vous', {
+      'patient_id':         patientId,
+      'motif':              motif,
+      'lieu':               lieu,
+      'date':               date,
+      'statut':             statut ?? 'planifie',
+      'soignant_matricule': soignantMatricule,
+      'remote_id':          remoteId,
     });
   }
 
@@ -821,20 +893,22 @@ class DatabaseService {
     required String nomMedicament,
     required String dosage,
     required int dureeMois,
+    String? soignantMatricule,
   }) async {
     final db = await database;
     final debut = DateTime.now();
     // DateTime gère le débordement de mois (ex. mois 13 → année suivante).
     final fin = DateTime(debut.year, debut.month + dureeMois, debut.day);
     return await db.insert('traitements', {
-      'patient_id':     patientId,
-      'nom_medicament': nomMedicament,
-      'dosage':         dosage,
-      'heure':          '',
-      'date_debut':     debut.toIso8601String(),
-      'date_fin':       fin.toIso8601String(),
-      'duree_mois':     dureeMois,
-      'est_actif':      1,
+      'patient_id':         patientId,
+      'nom_medicament':     nomMedicament,
+      'dosage':             dosage,
+      'heure':              '',
+      'date_debut':         debut.toIso8601String(),
+      'date_fin':           fin.toIso8601String(),
+      'duree_mois':         dureeMois,
+      'est_actif':          1,
+      'soignant_matricule': soignantMatricule,
     });
   }
 

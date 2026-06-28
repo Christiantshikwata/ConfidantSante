@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/providers/messages_provider.dart';
 import '../../core/services/database_service.dart';
@@ -1324,6 +1325,8 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                             ? '1 comprimé'
                             : dosageCtrl.text.trim(),
                         dureeMois: dureeMois,
+                        soignantMatricule:
+                            _matricule.isNotEmpty ? _matricule : null,
                       );
                       // Synchronise vers Firestore (cross-appareils), best-effort.
                       final row =
@@ -1339,6 +1342,8 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                           dateDebut:     row['date_debut'] as String?,
                           dateFin:       row['date_fin'] as String?,
                           dureeMois:     row['duree_mois'] as int?,
+                          soignantMatricule:
+                              _matricule.isNotEmpty ? _matricule : null,
                         );
                       }
                       if (!ctx.mounted) return;
@@ -1375,6 +1380,223 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
       );
     }
   }
+
+  // Médecin : fixe un rendez-vous de suivi pour le patient.
+  Future<void> _fixerRendezVous() async {
+    final patientId = widget.patient['id'] as int;
+    final numero = widget.patient['numero'] as String? ?? '';
+    final motifCtrl = TextEditingController();
+    final lieuCtrl = TextEditingController();
+    DateTime? selectedDate;
+    TimeOfDay selectedTime = const TimeOfDay(hour: 8, minute: 0);
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModal) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            left: 24, right: 24, top: 8,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0E7EF),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Text('Fixer un rendez-vous',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 20),
+
+                const Text('Motif',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: motifCtrl,
+                  decoration: _decoProto('Ex. : Consultation de suivi'),
+                ),
+                const SizedBox(height: 14),
+
+                const Text('Lieu',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: lieuCtrl,
+                  decoration: _decoProto('Ex. : CHCC, salle 3'),
+                ),
+                const SizedBox(height: 14),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final d = await showDatePicker(
+                            context: ctx,
+                            initialDate:
+                                DateTime.now().add(const Duration(days: 1)),
+                            firstDate: DateTime.now(),
+                            lastDate:
+                                DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (d != null) setModal(() => selectedDate = d);
+                        },
+                        child: _boiteRdv(
+                          Icons.calendar_today_rounded,
+                          selectedDate != null
+                              ? DateFormat('dd/MM/yyyy').format(selectedDate!)
+                              : 'Date',
+                          selectedDate != null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final ti = await showTimePicker(
+                              context: ctx, initialTime: selectedTime);
+                          if (ti != null) setModal(() => selectedTime = ti);
+                        },
+                        child: _boiteRdv(
+                          Icons.access_time_rounded,
+                          selectedTime.format(ctx),
+                          true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (selectedDate == null ||
+                          motifCtrl.text.trim().isEmpty) {
+                        return;
+                      }
+                      final dateTime = DateTime(
+                        selectedDate!.year,
+                        selectedDate!.month,
+                        selectedDate!.day,
+                        selectedTime.hour,
+                        selectedTime.minute,
+                      );
+                      final idLocal =
+                          await DatabaseService().ajouterRendezVous(
+                        patientId: patientId,
+                        motif: motifCtrl.text.trim(),
+                        lieu: lieuCtrl.text.trim(),
+                        date: dateTime.toIso8601String(),
+                        soignantMatricule:
+                            _matricule.isNotEmpty ? _matricule : null,
+                      );
+                      // Synchronise vers Firestore pour que le patient le voie.
+                      if (numero.isNotEmpty) {
+                        await SyncService().pousserRendezVous(
+                          numero:            numero,
+                          idLocal:           idLocal.toString(),
+                          motif:             motifCtrl.text.trim(),
+                          lieu:              lieuCtrl.text.trim(),
+                          date:              dateTime.toIso8601String(),
+                          soignantMatricule:
+                              _matricule.isNotEmpty ? _matricule : null,
+                        );
+                      }
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0288D1),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('Fixer le rendez-vous',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Rendez-vous fixé'),
+          backgroundColor: Color(0xFF0288D1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Widget _boiteRdv(IconData icon, String text, bool actif) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: actif ? AppColors.primaryPale : const Color(0xFFF8FAFF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: actif
+                ? const Color(0xFF0288D1)
+                : const Color(0xFFE0E7EF),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon,
+                color: actif
+                    ? const Color(0xFF0288D1)
+                    : AppColors.textSecondary,
+                size: 18),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(text,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: actif ? FontWeight.w600 : FontWeight.normal,
+                    color: actif
+                        ? const Color(0xFF0288D1)
+                        : AppColors.textSecondary,
+                  )),
+            ),
+          ],
+        ),
+      );
 
   InputDecoration _decoProto(String hint) => InputDecoration(
         hintText: hint,
@@ -1735,6 +1957,25 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                       ),
                     ),
                   ],
+                ),
+
+                const SizedBox(height: 12),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _fixerRendezVous,
+                    icon: const Icon(Icons.event_available_outlined, size: 18),
+                    label: const Text('Fixer un rendez-vous'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0288D1),
+                      side: const BorderSide(
+                          color: Color(0xFF0288D1), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
                 ),
 
                 const SizedBox(height: 100),
