@@ -125,7 +125,7 @@ class _DiscretionScreenState extends State<DiscretionScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Mode discrétion désactivé — icône normale restaurée'),
+            content: Text(AppTranslations.t('disc_desactive')),
             backgroundColor: AppColors.textSecondary,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -168,21 +168,21 @@ class _DiscretionScreenState extends State<DiscretionScreen>
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.shield, color: AppColors.primary, size: 24),
-            SizedBox(width: 10),
-            Text('Mode activé',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            const Icon(Icons.shield, color: AppColors.primary, size: 24),
+            const SizedBox(width: 10),
+            Text(AppTranslations.t('disc_mode_active'),
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Le mode discrétion est actif.',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            Text(
+              AppTranslations.t('disc_actif'),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             if (iconeChangee)
@@ -192,15 +192,15 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                   color: const Color(0xFFE8F5E9),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.check_circle_outline,
+                    const Icon(Icons.check_circle_outline,
                         color: AppColors.success, size: 16),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Icône externe changée dans le launcher.',
-                        style: TextStyle(fontSize: 12, color: AppColors.success),
+                        AppTranslations.t('disc_icone_ok'),
+                        style: const TextStyle(fontSize: 12, color: AppColors.success),
                       ),
                     ),
                   ],
@@ -213,24 +213,24 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                   color: const Color(0xFFFFF8E1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.warning_amber_outlined,
+                    const Icon(Icons.warning_amber_outlined,
                         color: AppColors.warning, size: 16),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Façade activée à l\'intérieur. Le changement d\'icône launcher peut nécessiter un redémarrage.',
-                        style: TextStyle(fontSize: 12, color: Color(0xFFE65100)),
+                        AppTranslations.t('disc_facade'),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFE65100)),
                       ),
                     ),
                   ],
                 ),
               ),
             const SizedBox(height: 10),
-            const Text(
-              'Votre code PIN sera requis pour retrouver l\'interface réelle.',
-              style: TextStyle(fontSize: 13, height: 1.5),
+            Text(
+              AppTranslations.t('disc_pin_requis'),
+              style: const TextStyle(fontSize: 13, height: 1.5),
             ),
           ],
         ),
@@ -243,7 +243,7 @@ class _DiscretionScreenState extends State<DiscretionScreen>
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Compris'),
+            child: Text(AppTranslations.t('compris')),
           ),
         ],
       ),
@@ -305,8 +305,8 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                           ),
                           Text(
                             _camouflageActif
-                                ? 'Protection active'
-                                : 'Protection désactivée',
+                                ? t('disc_protection_active')
+                                : t('disc_protection_inactive'),
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.7),
                               fontSize: 13,
@@ -395,8 +395,8 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Activer le camouflage',
+                            Text(
+                              t('disc_activer'),
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -405,8 +405,8 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                             ),
                             Text(
                               _enChargement
-                                  ? 'Changement en cours...'
-                                  : 'Change l\'icône dans le launcher',
+                                  ? t('disc_en_cours')
+                                  : t('disc_change_icone'),
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textSecondary,
@@ -436,8 +436,8 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                 const SizedBox(height: 20),
 
                 // Section apparence
-                const Text(
-                  'Apparence choisie',
+                Text(
+                  t('disc_apparence_choisie'),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -445,8 +445,8 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'L\'icône du launcher et l\'interface changeront selon ce choix.',
+                Text(
+                  t('disc_apparence_desc'),
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -524,7 +524,7 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                             ),
                             const Spacer(),
                             Text(
-                              app.nom,
+                              t('disg_${app.id}_nom'),
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -557,77 +557,16 @@ class _DiscretionScreenState extends State<DiscretionScreen>
                       Icon(Icons.warning_amber_outlined,
                           color: AppColors.warning, size: 18),
                       const SizedBox(width: 10),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Le changement d\'icône peut prendre quelques secondes sur Android. '
-                              'Votre code PIN sera requis pour accéder à ConfidantSanté depuis le mode camouflage.',
-                          style: TextStyle(
+                          AppTranslations.t('disc_avertissement'),
+                          style: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFFE65100),
                             height: 1.5,
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Info icônes requises
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryPale,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.info_outline,
-                              color: AppColors.primary, size: 16),
-                          SizedBox(width: 8),
-                          Text(
-                            'Icônes requises dans le projet',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Pour que le changement d\'icône fonctionne, ajoute ces fichiers dans android/app/src/main/res/mipmap-xxxhdpi/ :',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 6),
-                      ...['ic_launcher_calculatrice.png',
-                        'ic_launcher_meteo.png',
-                        'ic_launcher_notes.png',
-                        'ic_launcher_minuteur.png']
-                          .map((f) => Padding(
-                        padding:
-                        const EdgeInsets.only(top: 3),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.image_outlined,
-                                size: 12,
-                                color: AppColors.primary),
-                            const SizedBox(width: 6),
-                            Text(f,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                  color: AppColors.textPrimary,
-                                )),
-                          ],
-                        ),
-                      )),
                     ],
                   ),
                 ),
