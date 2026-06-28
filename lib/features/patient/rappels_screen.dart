@@ -4,8 +4,6 @@ import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
 import '../../core/providers/langue_provider.dart';
-import '../../core/services/database_service.dart';
-import '../../core/services/notification_service.dart';
 import '../../core/services/sync_service.dart';
 
 class RappelsScreen extends StatefulWidget {
@@ -23,7 +21,7 @@ class _RappelsScreenState extends State<RappelsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -120,7 +118,6 @@ class _RappelsScreenState extends State<RappelsScreen>
                         ),
                         tabs: [
                           Tab(text: t('onglet_aujourdhui')),
-                          Tab(text: t('onglet_semaine')),
                           Tab(text: t('onglet_historique')),
                         ],
                       ),
@@ -139,7 +136,6 @@ class _RappelsScreenState extends State<RappelsScreen>
                       rappels: rappels,
                       protocoles: patient.protocolesAConfigurer,
                     ),
-                    const _OngletSemaine(),
                     _OngletHistorique(historique: patient.historique),
                   ],
                 ),
@@ -511,45 +507,7 @@ class _CarteRappel extends StatelessWidget {
       (p) => p.estPrisAujourdhui(rappel['id'] as int? ?? -1),
     );
 
-    return Dismissible(
-      key: Key(rappel['id'].toString()),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: AppColors.danger,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(
-          Icons.delete_outline,
-          color: Colors.white, size: 24,
-        ),
-      ),
-      onDismissed: (_) async {
-        // Supprime le rappel de SQLite
-        await DatabaseService().supprimerRappel(
-          rappel['id'] as int,
-        );
-        if (context.mounted) {
-          context.read<PatientProvider>().chargerDonnees();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${rappel['nom_medicament']} ${AppTranslations.t('supprime')}',
-              ),
-              backgroundColor: AppColors.danger,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              margin: const EdgeInsets.all(16),
-            ),
-          );
-        }
-      },
-      child: Container(
+    return Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -666,357 +624,7 @@ class _CarteRappel extends StatelessWidget {
 
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ── FORMULAIRE AJOUT RAPPEL ──────────────────────────────────────────────────
-
-class _FormulaireAjoutRappel extends StatefulWidget {
-  const _FormulaireAjoutRappel();
-
-  @override
-  State<_FormulaireAjoutRappel> createState() =>
-      _FormulaireAjoutRappelState();
-}
-
-class _FormulaireAjoutRappelState
-    extends State<_FormulaireAjoutRappel> {
-
-  final TextEditingController _nomController    = TextEditingController();
-  final TextEditingController _dosageController = TextEditingController();
-  TimeOfDay _heure = TimeOfDay.now();
-  bool _enChargement = false;
-
-  @override
-  void dispose() {
-    _nomController.dispose();
-    _dosageController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _choisirHeure() async {
-    final h = await showTimePicker(
-      context: context,
-      initialTime: _heure,
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primary,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (h != null) setState(() => _heure = h);
-  }
-
-  Future<void> _enregistrer() async {
-    if (_nomController.text.trim().isEmpty) return;
-
-    setState(() => _enChargement = true);
-
-    final heure =
-        '${_heure.hour.toString().padLeft(2, '0')}h'
-        '${_heure.minute.toString().padLeft(2, '0')}';
-
-    // 1 — Sauvegarde dans SQLite
-    await context.read<PatientProvider>().ajouterRappel(
-      nomMedicament: _nomController.text.trim(),
-      dosage: _dosageController.text.trim().isEmpty
-          ? '1 comprimé'
-          : _dosageController.text.trim(),
-      heure: heure,
-    );
-
-    // 2 — Programme la notification locale
-    await NotificationService().programmerDepuisTexte(
-      id: DateTime.now().millisecondsSinceEpoch % 100000,
-      nomMedicament: _nomController.text.trim(),
-      dosage: _dosageController.text.trim().isEmpty
-          ? '1 comprimé'
-          : _dosageController.text.trim(),
-      heureTexte: heure,
-    );
-
-    if (!mounted) return;
-    setState(() => _enChargement = false);
-    Navigator.pop(context);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '✓ ${_nomController.text} — rappel programmé à $heure',
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft:  Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
-      ),
-      padding: EdgeInsets.only(
-        left: 24, right: 24, top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-
-          // Barre de drag
-          Center(
-            child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE0E7EF),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          const Text(
-            'Ajouter un médicament',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Nom du médicament
-          _champForm(
-            controller: _nomController,
-            label: 'Nom du médicament',
-            hint: 'Ex : Lamivudine',
-            icone: Icons.medication_outlined,
-          ),
-
-          const SizedBox(height: 14),
-
-          // Dosage
-          _champForm(
-            controller: _dosageController,
-            label: 'Dosage',
-            hint: 'Ex : 150mg — 1 comprimé',
-            icone: Icons.science_outlined,
-          ),
-
-          const SizedBox(height: 14),
-
-          // Sélecteur d'heure
-          GestureDetector(
-            onTap: _choisirHeure,
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE0E7EF)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.schedule,
-                    color: AppColors.primary, size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Heure de prise',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${_heure.hour.toString().padLeft(2, '0')}h'
-                              '${_heure.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: AppColors.textSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Bouton enregistrer
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: _enChargement ? null : _enregistrer,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: _enChargement
-                  ? const SizedBox(
-                width: 22, height: 22,
-                child: CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2.5,
-                ),
-              )
-                  : const Text(
-                'Enregistrer',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-
-        ],
-      ),
-    );
-  }
-
-  Widget _champForm({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icone,
-  }) {
-    return TextField(
-      controller: controller,
-      style: const TextStyle(
-        fontSize: 14, color: AppColors.textPrimary,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icone, color: AppColors.primary, size: 20),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFF),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE0E7EF)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE0E7EF)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: AppColors.primary, width: 1.5,
-          ),
-        ),
-        labelStyle: const TextStyle(
-          color: AppColors.textSecondary, fontSize: 13,
-        ),
-      ),
-    );
-  }
-}
-
-// ── ONGLET SEMAINE ───────────────────────────────────────────────────────────
-
-class _OngletSemaine extends StatelessWidget {
-  const _OngletSemaine();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTranslations.t;
-    final jours = [
-      t('jour_lun'), t('jour_mar'), t('jour_mer'), t('jour_jeu'),
-      t('jour_ven'), t('jour_sam'), t('jour_dim'),
-    ];
-    final aujourd = DateTime.now().weekday - 1;
-
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: jours.asMap().entries.map((entry) {
-        final estAujourdhui = entry.key == aujourd;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: estAujourdhui
-                ? AppColors.primaryPale
-                : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: estAujourdhui
-                  ? AppColors.primary
-                  : const Color(0xFFE0E7EF),
-            ),
-          ),
-          child: Row(
-            children: [
-              Text(
-                entry.value,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: estAujourdhui
-                      ? AppColors.primary
-                      : AppColors.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              if (estAujourdhui)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    t('aujourdhui'),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
+      );
   }
 }
 
