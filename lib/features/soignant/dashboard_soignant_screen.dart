@@ -269,6 +269,12 @@ class _PageAccueil extends StatelessWidget {
     return total / patients.length;
   }
 
+  double _obs(Map<String, dynamic> p) => p['observance'] as double? ?? 0;
+  int get _nbExcellent => patients.where((p) => _obs(p) >= 90).length;
+  int get _nbAttention =>
+      patients.where((p) => _obs(p) >= 70 && _obs(p) < 90).length;
+  int get _nbEnRetard => patients.where((p) => _obs(p) < 70).length;
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -422,6 +428,17 @@ class _PageAccueil extends StatelessWidget {
                     ),
                   )
                 else ...[
+
+                  // Graphique : répartition de l'observance des patients
+                  if (patients.isNotEmpty) ...[
+                    _CarteGraphiqueObservance(
+                      excellent: _nbExcellent,
+                      attention: _nbAttention,
+                      enRetard:  _nbEnRetard,
+                      moyenne:   _observanceMoyenne,
+                    ),
+                    const SizedBox(height: 20),
+                  ],
 
                   // Alertes
                   if (_alertes.isNotEmpty) ...[
@@ -585,6 +602,173 @@ class _PageAccueil extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  GRAPHIQUE : répartition de l'observance (anneau, sans dépendance externe)
+// ─────────────────────────────────────────────────────────────────────────────
+class _CarteGraphiqueObservance extends StatelessWidget {
+  final int excellent, attention, enRetard;
+  final double moyenne;
+  const _CarteGraphiqueObservance({
+    required this.excellent,
+    required this.attention,
+    required this.enRetard,
+    required this.moyenne,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = excellent + attention + enRetard;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE0E7EF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Répartition de l\'observance',
+            style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              SizedBox(
+                width: 110,
+                height: 110,
+                child: CustomPaint(
+                  painter: _DonutPainter(
+                    excellent: excellent,
+                    attention: attention,
+                    enRetard: enRetard,
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${moyenne.toInt()}%',
+                            style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary)),
+                        const Text('moyenne',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _legende(AppColors.success, 'Excellent (≥ 90 %)', excellent),
+                    const SizedBox(height: 8),
+                    _legende(AppColors.warning, 'Attention (70–89 %)', attention),
+                    const SizedBox(height: 8),
+                    _legende(AppColors.danger, 'En retard (< 70 %)', enRetard),
+                    const SizedBox(height: 10),
+                    Text('$total patient${total > 1 ? 's' : ''} au total',
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _legende(Color couleur, String label, int n) => Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+                color: couleur, borderRadius: BorderRadius.circular(3)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textPrimary)),
+          ),
+          Text('$n',
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary)),
+        ],
+      );
+}
+
+class _DonutPainter extends CustomPainter {
+  final int excellent, attention, enRetard;
+  _DonutPainter({
+    required this.excellent,
+    required this.attention,
+    required this.enRetard,
+  });
+
+  static const double _pi = 3.14159265358979;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = excellent + attention + enRetard;
+    final centre = Offset(size.width / 2, size.height / 2);
+    final rayon = size.width / 2 - 8;
+    const stroke = 14.0;
+
+    final fond = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..color = const Color(0xFFECEFF1);
+    canvas.drawCircle(centre, rayon, fond);
+    if (total == 0) return;
+
+    final segments = <List<Object>>[
+      [excellent, AppColors.success],
+      [attention, AppColors.warning],
+      [enRetard, AppColors.danger],
+    ];
+    double depart = -_pi / 2;
+    for (final seg in segments) {
+      final n = seg[0] as int;
+      if (n == 0) continue;
+      final angle = (n / total) * 2 * _pi;
+      final p = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.butt
+        ..color = seg[1] as Color;
+      canvas.drawArc(
+        Rect.fromCircle(center: centre, radius: rayon),
+        depart,
+        angle,
+        false,
+        p,
+      );
+      depart += angle;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter old) =>
+      old.excellent != excellent ||
+      old.attention != attention ||
+      old.enRetard != enRetard;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
