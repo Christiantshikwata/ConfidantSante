@@ -27,7 +27,7 @@ class DatabaseService {
     return await openDatabase(
       cheminComplet,
       onCreate: _creerTables,
-      version: 9,
+      version: 10,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _creerTableRendezVous(db);
@@ -84,6 +84,18 @@ class DatabaseService {
           await _ajouterColonneSiAbsente(
               db, 'rendez_vous', 'remote_id', 'TEXT');
         }
+        if (oldVersion < 10) {
+          // Informations cliniques et administratives du patient (saisies par
+          // le médecin lors de l'ajout).
+          await _ajouterColonneSiAbsente(db, 'patients', 'adresse', 'TEXT');
+          await _ajouterColonneSiAbsente(db, 'patients', 'genre', 'TEXT');
+          await _ajouterColonneSiAbsente(
+              db, 'patients', 'taux_serologique', 'TEXT');
+          await _ajouterColonneSiAbsente(
+              db, 'patients', 'contact_urgence_nom', 'TEXT');
+          await _ajouterColonneSiAbsente(
+              db, 'patients', 'contact_urgence_tel', 'TEXT');
+        }
       },
     );
   }
@@ -111,7 +123,12 @@ class DatabaseService {
         soignant TEXT,
         soignant_matricule TEXT,
         hopital TEXT,
-        date_creation TEXT
+        date_creation TEXT,
+        adresse TEXT,
+        genre TEXT,
+        taux_serologique TEXT,
+        contact_urgence_nom TEXT,
+        contact_urgence_tel TEXT
       )
     ''');
 
@@ -652,21 +669,31 @@ class DatabaseService {
     String? soignant,
     String? soignantMatricule,
     String? hopital,
+    String? adresse,
+    String? genre,
+    String? tauxSerologique,
+    String? contactUrgenceNom,
+    String? contactUrgenceTel,
   }) async {
     final db = await database;
     return await db.insert(
       'patients',
       {
-        'nom':                nom,
-        'numero':             numero,
-        'mot_de_passe':       PasswordService.hash(
+        'nom':                 nom,
+        'numero':              numero,
+        'mot_de_passe':        PasswordService.hash(
           identifiant: numero,
           motDePasse: motDePasse,
         ),
-        'soignant':           soignant ?? 'Dr. Yves Ndetereyuwe',
-        'soignant_matricule': soignantMatricule,
-        'hopital':            hopital ?? 'Centre Hospitalier Congo-Chine',
-        'date_creation':      DateTime.now().toIso8601String(),
+        'soignant':            soignant ?? 'Dr. Yves Ndetereyuwe',
+        'soignant_matricule':  soignantMatricule,
+        'hopital':             hopital ?? 'Centre Hospitalier Congo-Chine',
+        'date_creation':       DateTime.now().toIso8601String(),
+        'adresse':             adresse,
+        'genre':               genre,
+        'taux_serologique':    tauxSerologique,
+        'contact_urgence_nom': contactUrgenceNom,
+        'contact_urgence_tel': contactUrgenceTel,
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
@@ -734,6 +761,11 @@ class DatabaseService {
     String? soignantMatricule,
     String? hopital,
     String? hashMotDePasse,
+    String? adresse,
+    String? genre,
+    String? tauxSerologique,
+    String? contactUrgenceNom,
+    String? contactUrgenceTel,
   }) async {
     final db = await database;
     final existant = await db.query('patients',
@@ -742,8 +774,13 @@ class DatabaseService {
       await db.update(
         'patients',
         {
-          'soignant_matricule': soignantMatricule,
+          'soignant_matricule':  soignantMatricule,
           if (soignant != null) 'soignant': soignant,
+          if (adresse != null) 'adresse': adresse,
+          if (genre != null) 'genre': genre,
+          if (tauxSerologique != null) 'taux_serologique': tauxSerologique,
+          if (contactUrgenceNom != null) 'contact_urgence_nom': contactUrgenceNom,
+          if (contactUrgenceTel != null) 'contact_urgence_tel': contactUrgenceTel,
         },
         where: 'numero = ?',
         whereArgs: [numero],
@@ -753,13 +790,18 @@ class DatabaseService {
     await db.insert(
       'patients',
       {
-        'nom':                nom,
-        'numero':             numero,
-        'mot_de_passe':       hashMotDePasse ?? '',
-        'soignant':           soignant,
-        'soignant_matricule': soignantMatricule,
-        'hopital':            hopital,
-        'date_creation':      DateTime.now().toIso8601String(),
+        'nom':                 nom,
+        'numero':              numero,
+        'mot_de_passe':        hashMotDePasse ?? '',
+        'soignant':            soignant,
+        'soignant_matricule':  soignantMatricule,
+        'hopital':             hopital,
+        'date_creation':       DateTime.now().toIso8601String(),
+        'adresse':             adresse,
+        'genre':               genre,
+        'taux_serologique':    tauxSerologique,
+        'contact_urgence_nom': contactUrgenceNom,
+        'contact_urgence_tel': contactUrgenceTel,
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );

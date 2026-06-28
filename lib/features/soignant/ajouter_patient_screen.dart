@@ -24,6 +24,11 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
   final _nomCtrl    = TextEditingController();
   final _numeroCtrl = TextEditingController();
   final _mdpCtrl    = TextEditingController();
+  final _adresseCtrl    = TextEditingController();
+  final _tauxCtrl       = TextEditingController();
+  final _contactNomCtrl = TextEditingController();
+  final _contactTelCtrl = TextEditingController();
+  String? _genre;
 
   bool _mdpVisible   = false;
   bool _enChargement = false;
@@ -46,11 +51,19 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
     _nomCtrl.dispose();
     _numeroCtrl.dispose();
     _mdpCtrl.dispose();
+    _adresseCtrl.dispose();
+    _tauxCtrl.dispose();
+    _contactNomCtrl.dispose();
+    _contactTelCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _enregistrer() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_genre == null) {
+      setState(() => _erreur = 'Veuillez indiquer le genre du patient.');
+      return;
+    }
     setState(() { _enChargement = true; _erreur = null; _succes = null; });
 
     try {
@@ -90,6 +103,11 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
         soignant:          nomSoignant ?? 'Dr. Yves Ndetereyuwe',
         soignantMatricule: matricule,
         hopital:           'Centre Hospitalier Congo-Chine',
+        adresse:           _adresseCtrl.text.trim(),
+        genre:             _genre,
+        tauxSerologique:   _tauxCtrl.text.trim(),
+        contactUrgenceNom: _contactNomCtrl.text.trim(),
+        contactUrgenceTel: _contactTelCtrl.text.trim(),
       );
 
       if (id > 0) {
@@ -101,6 +119,11 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
           soignant:          nomSoignant ?? 'Dr. Yves Ndetereyuwe',
           soignantMatricule: matricule,
           hopital:           'Centre Hospitalier Congo-Chine',
+          adresse:           _adresseCtrl.text.trim(),
+          genre:             _genre,
+          tauxSerologique:   _tauxCtrl.text.trim(),
+          contactUrgenceNom: _contactNomCtrl.text.trim(),
+          contactUrgenceTel: _contactTelCtrl.text.trim(),
         );
 
         // Attribue le protocole : l'heure sera choisie par le patient.
@@ -128,9 +151,12 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
         setState(() => _succes = 'Patient $nom créé avec succès !');
         _formKey.currentState!.reset();
         _nomCtrl.clear(); _numeroCtrl.clear(); _mdpCtrl.clear();
+        _adresseCtrl.clear(); _tauxCtrl.clear();
+        _contactNomCtrl.clear(); _contactTelCtrl.clear();
         setState(() {
           _protocoleChoisi = _protocoles.first;
           _dureeMois = 1;
+          _genre = null;
         });
       } else {
         setState(() => _erreur = 'Erreur lors de la création du patient.');
@@ -324,6 +350,89 @@ class _AjouterPatientScreenState extends State<AjouterPatientScreen> {
                         if (v.length < 6) return 'Minimum 6 caractères';
                         return null;
                       },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Genre
+                    _LabelChamp('Genre'),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: ['Homme', 'Femme', 'Autre'].map((g) {
+                        final actif = _genre == g;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _genre = g),
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: actif
+                                    ? const Color(0xFF0288D1)
+                                    : const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(g,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: actif
+                                          ? Colors.white
+                                          : AppColors.textSecondary,
+                                    )),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Adresse
+                    _LabelChamp('Adresse'),
+                    const SizedBox(height: 8),
+                    _ChampTexte(
+                      controller: _adresseCtrl,
+                      hint: 'Ex. : Av. Kasaï 12, Lubumbashi',
+                      icone: Icons.location_on_outlined,
+                      validator: (_) => null,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Taux sérologique
+                    _LabelChamp('Taux sérologique'),
+                    const SizedBox(height: 8),
+                    _ChampTexte(
+                      controller: _tauxCtrl,
+                      hint: 'Ex. : CD4 450 — charge virale indétectable',
+                      icone: Icons.biotech_outlined,
+                      validator: (_) => null,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Contact d'urgence
+                    _LabelChamp('Contact d\'urgence (nom)'),
+                    const SizedBox(height: 8),
+                    _ChampTexte(
+                      controller: _contactNomCtrl,
+                      hint: 'Ex. : Marie Ngoy (sœur)',
+                      icone: Icons.contact_emergency_outlined,
+                      validator: (_) => null,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    _LabelChamp('Contact d\'urgence (téléphone)'),
+                    const SizedBox(height: 8),
+                    _ChampTexte(
+                      controller: _contactTelCtrl,
+                      hint: 'Ex. : 0991234567',
+                      icone: Icons.phone_outlined,
+                      validator: (_) => null,
                     ),
 
                     const SizedBox(height: 16),

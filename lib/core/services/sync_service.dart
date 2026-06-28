@@ -287,18 +287,28 @@ class SyncService {
     String? soignant,
     String? soignantMatricule,
     String? hopital,
+    String? adresse,
+    String? genre,
+    String? tauxSerologique,
+    String? contactUrgenceNom,
+    String? contactUrgenceTel,
   }) async {
     if (!firebaseDisponible) return;
     try {
       await _firestore.collection('patients').doc(numero).set({
-        'nom':                nom,
-        'numero':             numero,
+        'nom':                 nom,
+        'numero':              numero,
         if (uid != null) 'uid': uid,
-        'role':               'patient',
-        'soignant':           soignant,
-        'soignant_matricule': soignantMatricule,
-        'hopital':            hopital,
-        'compte_cree':        FieldValue.serverTimestamp(),
+        'role':                'patient',
+        'soignant':            soignant,
+        'soignant_matricule':  soignantMatricule,
+        'hopital':             hopital,
+        'adresse':             adresse,
+        'genre':               genre,
+        'taux_serologique':    tauxSerologique,
+        'contact_urgence_nom': contactUrgenceNom,
+        'contact_urgence_tel': contactUrgenceTel,
+        'compte_cree':         FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('[SyncService] Erreur pousserComptePatient : $e');
@@ -376,6 +386,11 @@ class SyncService {
           soignant:          d['soignant'] as String?,
           soignantMatricule: d['soignant_matricule'] as String?,
           hopital:           d['hopital'] as String?,
+          adresse:           d['adresse'] as String?,
+          genre:             d['genre'] as String?,
+          tauxSerologique:   d['taux_serologique'] as String?,
+          contactUrgenceNom: d['contact_urgence_nom'] as String?,
+          contactUrgenceTel: d['contact_urgence_tel'] as String?,
         );
       }
     } catch (e) {
