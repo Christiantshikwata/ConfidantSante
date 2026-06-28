@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_translations.dart';
 import '../../core/providers/patient_provider.dart';
 import '../../core/providers/langue_provider.dart';
+import '../../core/services/database_service.dart';
 import '../../core/services/sync_service.dart';
 
 class RappelsScreen extends StatefulWidget {
@@ -741,39 +742,40 @@ class _OngletHistorique extends StatelessWidget {
 
         const SizedBox(height: 12),
 
-        ...historique.reversed.map((prise) {
-          final estPris = prise['statut'] == 'pris';
-          final date = DateTime.tryParse(
-            prise['date_heure'] as String? ?? '',
-          );
+        // Une seule entrée par jour (agrège les protocoles multiples).
+        ...DatabaseService.grouperParJour(historique).reversed.map((jour) {
+          final date  = jour['date'] as DateTime;
+          final taux  = jour['taux'] as double;
+          final pris  = jour['pris'] as int;
+          final total = jour['total'] as int;
+          // Couleur graduée : vert (tout pris), ambre (partiel), rouge (rien).
+          final couleur = taux >= 1.0
+              ? AppColors.success
+              : (taux <= 0.0 ? AppColors.danger : AppColors.warning);
+          final pct = (taux * 100).round();
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: estPris
-                    ? AppColors.success.withValues(alpha: 0.3)
-                    : AppColors.danger.withValues(alpha: 0.3),
-              ),
+              border: Border.all(color: couleur.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 36, height: 36,
+                  width: 38, height: 38,
                   decoration: BoxDecoration(
-                    color: estPris
-                        ? AppColors.success.withValues(alpha: 0.1)
-                        : AppColors.danger.withValues(alpha: 0.1),
+                    color: couleur.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    estPris ? Icons.check : Icons.close,
-                    color: estPris
-                        ? AppColors.success
-                        : AppColors.danger,
-                    size: 18,
+                  child: Center(
+                    child: Text('$pct%',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: couleur,
+                        )),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -782,24 +784,21 @@ class _OngletHistorique extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        estPris ? t('prise_confirmee') : t('prise_manquee'),
-                        style: TextStyle(
+                        '${date.day.toString().padLeft(2, '0')}/'
+                            '${date.month.toString().padLeft(2, '0')}/${date.year}',
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: estPris
-                              ? AppColors.success
-                              : AppColors.danger,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                      if (date != null)
-                        Text(
-                          '${date.day}/${date.month}/${date.year} '
-                              'à ${date.hour}h${date.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                          ),
+                      Text(
+                        '$pris/$total ${t('prises_label')}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
                         ),
+                      ),
                     ],
                   ),
                 ),

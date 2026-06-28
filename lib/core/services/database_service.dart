@@ -535,6 +535,33 @@ class DatabaseService {
     );
   }
 
+  /// Regroupe une liste de prises par jour calendaire (utile quand le patient
+  /// suit plusieurs protocoles : une seule entrée par date au lieu d'une par
+  /// médicament). Retourne une liste triée par date croissante, chaque élément
+  /// contenant : date (DateTime du jour), total, pris et taux (0..1).
+  static List<Map<String, dynamic>> grouperParJour(
+      List<Map<String, dynamic>> prises) {
+    final Map<String, Map<String, dynamic>> parJour = {};
+    for (final p in prises) {
+      final dt = DateTime.tryParse(p['date_heure'] as String? ?? '');
+      if (dt == null) continue;
+      final jour = DateTime(dt.year, dt.month, dt.day);
+      final cle = jour.toIso8601String();
+      final m = parJour.putIfAbsent(
+          cle, () => {'date': jour, 'total': 0, 'pris': 0});
+      m['total'] = (m['total'] as int) + 1;
+      if (p['statut'] == 'pris') m['pris'] = (m['pris'] as int) + 1;
+    }
+    final liste = parJour.values.toList()
+      ..sort((a, b) =>
+          (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+    for (final m in liste) {
+      final total = m['total'] as int;
+      m['taux'] = total > 0 ? (m['pris'] as int) / total : 0.0;
+    }
+    return liste;
+  }
+
   // ── RENDEZ-VOUS ────────────────────────────────────────────────────────────
   /// Récupère tous les rendez-vous d'un patient
   Future<List<Map<String, dynamic>>> getRendezVous(int patientId) async {

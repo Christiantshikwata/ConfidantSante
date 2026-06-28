@@ -1843,29 +1843,37 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                               color: AppColors.textSecondary)),
                     ),
                   )
-                      : GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 7,
-                      crossAxisSpacing: 4,
-                      mainAxisSpacing: 4,
-                    ),
-                    itemCount: _historique.length.clamp(0, 30),
-                    itemBuilder: (_, i) {
-                      final pris =
-                          _historique[i]['statut'] == 'pris';
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: pris
-                              ? const Color(0xFF0288D1)
-                              : const Color(0xFFFFCDD2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      );
-                    },
-                  ),
+                      : Builder(builder: (_) {
+                    // Une seule case par jour (agrège les protocoles multiples),
+                    // colorée selon le taux : vert / ambre / rouge.
+                    final jours =
+                        DatabaseService.grouperParJour(_historique);
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 7,
+                        crossAxisSpacing: 4,
+                        mainAxisSpacing: 4,
+                      ),
+                      itemCount: jours.length,
+                      itemBuilder: (_, i) {
+                        final taux = jours[i]['taux'] as double;
+                        final couleur = taux >= 1.0
+                            ? AppColors.success
+                            : (taux <= 0.0
+                                ? AppColors.danger
+                                : AppColors.warning);
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: couleur,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        );
+                      },
+                    );
+                  }),
                 ),
 
                 const SizedBox(height: 20),
