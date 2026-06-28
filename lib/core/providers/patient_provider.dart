@@ -46,6 +46,29 @@ class PatientProvider extends ChangeNotifier {
   /// Indique si un rappel a déjà été marqué pris aujourd'hui.
   bool estPrisAujourdhui(int rappelId) => _prisAujourdhui.contains(rappelId);
 
+  Map<String, dynamic>? get _protocoleActif =>
+      _traitements.isNotEmpty ? _traitements.first : null;
+
+  /// Durée totale (en jours) du protocole en cours, ou 0 si aucun.
+  int get protocoleDureeJours {
+    final t = _protocoleActif;
+    if (t == null) return 0;
+    final debut = DateTime.tryParse(t['date_debut'] as String? ?? '');
+    final fin = DateTime.tryParse(t['date_fin'] as String? ?? '');
+    if (debut == null || fin == null) return 0;
+    return fin.difference(debut).inDays;
+  }
+
+  /// Nombre de jours restants avant la fin du protocole (jamais négatif).
+  int get protocoleJoursRestants {
+    final t = _protocoleActif;
+    if (t == null) return 0;
+    final fin = DateTime.tryParse(t['date_fin'] as String? ?? '');
+    if (fin == null) return 0;
+    final r = fin.difference(DateTime.now()).inDays;
+    return r < 0 ? 0 : r;
+  }
+
   // Charge toutes les données du patient depuis SQLite
   Future<void> chargerDonnees() async {
     _chargement = true;

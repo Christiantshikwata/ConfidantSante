@@ -453,7 +453,63 @@ class _PageAccueil extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // Durée du protocole attribué par le médecin
+                  if (patient.protocoleDureeJours > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE0E7EF)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38, height: 38,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryPale,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.event_note_outlined,
+                                color: AppColors.primary, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(t('duree_protocole'),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    )),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${patient.protocoleDureeJours} ${t('jours')}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '${patient.protocoleJoursRestants} ${t('jours_restants')}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   // Section rappels du jour
                   Row(
