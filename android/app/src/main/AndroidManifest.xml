@@ -13,7 +13,9 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Activité principale (lanceur standard) -->
+        <!-- Activité principale : cible des alias de lanceur (mode discrétion).
+             Elle ne porte plus le filtre LAUNCHER : ce sont les activity-alias
+             ci-dessous qui fournissent l'entrée du lanceur et son icône. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -26,11 +28,85 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
+        </activity>
+
+        <!-- ── Alias de lanceur pour le mode discrétion ──────────────────────
+             Un seul alias est activé à la fois (basculé par MainActivity.kt).
+             Le code natif et IconService.dart utilisent ces noms. -->
+
+        <!-- Icône normale (activée par défaut) -->
+        <activity-alias
+            android:name=".MainActivityDefault"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="ConfidantSanté"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- Déguisement : Calculatrice -->
+        <activity-alias
+            android:name=".MainActivityCalculatrice"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_calculatrice"
+            android:roundIcon="@mipmap/ic_launcher_calculatrice_round"
+            android:label="Calculatrice"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Déguisement : Météo -->
+        <activity-alias
+            android:name=".MainActivityMeteo"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_meteo"
+            android:roundIcon="@mipmap/ic_launcher_meteo_round"
+            android:label="Météo"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Déguisement : Notes -->
+        <activity-alias
+            android:name=".MainActivityNotes"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_notes"
+            android:roundIcon="@mipmap/ic_launcher_notes_round"
+            android:label="Notes"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Déguisement : Minuteur -->
+        <activity-alias
+            android:name=".MainActivityMinuteur"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_minuteur"
+            android:roundIcon="@mipmap/ic_launcher_minuteur_round"
+            android:label="Minuteur"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
 
         <!-- Notifications -->
         <meta-data android:name="flutterEmbedding" android:value="2"/>
