@@ -1409,6 +1409,17 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
     });
   }
 
+  /// Jours restants avant la fin du protocole en cours (jamais négatif),
+  /// ou null si aucun protocole actif ou pas de date de fin.
+  int? get _joursRestantsProtocole {
+    if (_traitements.isEmpty) return null;
+    final fin =
+        DateTime.tryParse(_traitements.first['date_fin'] as String? ?? '');
+    if (fin == null) return null;
+    final r = fin.difference(DateTime.now()).inDays;
+    return r < 0 ? 0 : r;
+  }
+
   /// Identifiant de la conversation avec ce patient (pour le badge non-lus).
   String get _convId => MessagerieScreen.conversationIdPour(
         patientNumero: widget.patient['numero'] as String? ?? '',
@@ -2156,6 +2167,13 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                             : '—',
                         false,
                       ),
+                      _LigneInfo(
+                        'Jours restants',
+                        _joursRestantsProtocole != null
+                            ? '$_joursRestantsProtocole j'
+                            : '—',
+                        false,
+                      ),
                       _LigneInfo('Hôpital',
                           patient['hopital'] as String? ?? 'CHCC', false),
                       _LigneInfo('Soignant',
@@ -2210,16 +2228,32 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                       ),
                       itemCount: jours.length,
                       itemBuilder: (_, i) {
-                        final taux = jours[i]['taux'] as double;
+                        final j = jours[i];
+                        final date = j['date'] as DateTime;
+                        final taux = j['taux'] as double;
                         final couleur = taux >= 1.0
                             ? AppColors.success
                             : (taux <= 0.0
                                 ? AppColors.danger
                                 : AppColors.warning);
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: couleur,
-                            borderRadius: BorderRadius.circular(4),
+                        return Tooltip(
+                          message:
+                              '${date.day}/${date.month} — ${(taux * 100).round()}% (${j['pris']}/${j['total']})',
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: couleur,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${date.day}',
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                           ),
                         );
                       },
