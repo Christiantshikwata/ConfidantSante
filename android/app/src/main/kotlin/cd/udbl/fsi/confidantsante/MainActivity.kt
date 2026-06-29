@@ -15,7 +15,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     // Liste de tous les alias définis dans AndroidManifest.xml
     private val TOUS_ALIASES = listOf(
-        "cd.udbl.fsi.confidantsante.MainActivityDefault",
+        "cd.udbl.fsi.confidantsante.MainActivity",
         "cd.udbl.fsi.confidantsante.MainActivityCalculatrice",
         "cd.udbl.fsi.confidantsante.MainActivityMeteo",
         "cd.udbl.fsi.confidantsante.MainActivityNotes",

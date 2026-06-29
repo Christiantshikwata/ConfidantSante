@@ -16,7 +16,7 @@ class IconService {
 
   // Noms des alias Android (doivent correspondre à AndroidManifest.xml)
   static const Map<String, String> _aliases = {
-    'normal':       'cd.udbl.fsi.confidantsante.MainActivityDefault',
+    'normal':       'cd.udbl.fsi.confidantsante.MainActivity',
     'calculatrice': 'cd.udbl.fsi.confidantsante.MainActivityCalculatrice',
     'meteo':        'cd.udbl.fsi.confidantsante.MainActivityMeteo',
     'notes':        'cd.udbl.fsi.confidantsante.MainActivityNotes',

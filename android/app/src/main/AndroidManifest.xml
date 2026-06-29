@@ -13,11 +13,13 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Activité principale : cible des alias de lanceur (mode discrétion).
-             Elle ne porte plus le filtre LAUNCHER : ce sont les activity-alias
-             ci-dessous qui fournissent l'entrée du lanceur et son icône. -->
+        <!-- Activité principale = icône NORMALE (activée par défaut). Elle porte
+             le filtre LAUNCHER (requis par l'outil Flutter pour trouver l'activité
+             de lancement). Les déguisements sont des alias désactivés ci-dessous ;
+             activer un déguisement enable l'alias et disable cette activité. -->
         <activity
             android:name=".MainActivity"
+            android:enabled="true"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
@@ -28,25 +30,14 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
-        </activity>
-
-        <!-- ── Alias de lanceur pour le mode discrétion ──────────────────────
-             Un seul alias est activé à la fois (basculé par MainActivity.kt).
-             Le code natif et IconService.dart utilisent ces noms. -->
-
-        <!-- Icône normale (activée par défaut) -->
-        <activity-alias
-            android:name=".MainActivityDefault"
-            android:enabled="true"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="ConfidantSanté"
-            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity-alias>
+        </activity>
+
+        <!-- ── Alias de lanceur pour le mode discrétion (déguisements) ────────
+             Désactivés par défaut ; basculés par MainActivity.kt. -->
 
         <!-- Déguisement : Calculatrice -->
         <activity-alias
