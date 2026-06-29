@@ -1409,6 +1409,36 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
     });
   }
 
+  /// Identifiant de la conversation avec ce patient (pour le badge non-lus).
+  String get _convId => MessagerieScreen.conversationIdPour(
+        patientNumero: widget.patient['numero'] as String? ?? '',
+        soignantMatricule: _matricule.isNotEmpty
+            ? _matricule
+            : DatabaseService.soignantDemoMatricule,
+      );
+
+  /// Ouvre la messagerie avec ce patient.
+  Future<void> _ouvrirMessagerie() async {
+    final matricule = await SessionService().getSoignantMatricule() ??
+        DatabaseService.soignantDemoMatricule;
+    final numero = widget.patient['numero'] as String? ?? '';
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MessagerieScreen(
+          conversationId: MessagerieScreen.conversationIdPour(
+            patientNumero: numero,
+            soignantMatricule: matricule,
+          ),
+          monId: matricule,
+          destinataireNom: widget.patient['nom'] as String? ?? '',
+          role: 'soignant',
+        ),
+      ),
+    );
+  }
+
   /// Supprime définitivement le patient (local + Firestore) après confirmation.
   Future<void> _confirmerSuppression() async {
     final nom = widget.patient['nom'] as String? ?? 'ce patient';
@@ -1929,17 +1959,67 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                                   color: Colors.white, size: 16),
                             ),
                           ),
-                          GestureDetector(
-                            onTap: _confirmerSuppression,
-                            child: Container(
-                              width: 38, height: 38,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(10),
+                          Row(
+                            children: [
+                              // Bouton messagerie — même style que côté patient
+                              // (cercle blanc plein, icône contrastée) + badge.
+                              GestureDetector(
+                                onTap: _ouvrirMessagerie,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Container(
+                                      width: 42, height: 42,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.15),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.chat_bubble_rounded,
+                                          color: Color(0xFF0288D1),
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                                    if (context
+                                            .watch<MessagesProvider>()
+                                            .nonLusPour(_convId) >
+                                        0)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: BadgeNonLus(
+                                          nombre: context
+                                              .watch<MessagesProvider>()
+                                              .nonLusPour(_convId),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
-                              child: const Icon(Icons.delete_outline,
-                                  color: Colors.white, size: 18),
-                            ),
+                              const SizedBox(width: 10),
+                              GestureDetector(
+                                onTap: _confirmerSuppression,
+                                child: Container(
+                                  width: 38, height: 38,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.delete_outline,
+                                      color: Colors.white, size: 18),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -2149,93 +2229,23 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
 
                 const SizedBox(height: 20),
 
-                // Actions
-                Row(
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              final matricule =
-                                  await SessionService().getSoignantMatricule() ??
-                                      DatabaseService.soignantDemoMatricule;
-                              final numero = patient['numero'] as String? ?? '';
-                              if (!context.mounted) return;
-                              Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => MessagerieScreen(
-                                  conversationId:
-                                      MessagerieScreen.conversationIdPour(
-                                    patientNumero: numero,
-                                    soignantMatricule: matricule,
-                                  ),
-                                  monId: matricule,
-                                  destinataireNom: patient['nom'] as String,
-                                  role: 'soignant',
-                                ),
-                              ));
-                            },
-                            icon: const Icon(Icons.message_outlined, size: 18),
-                            label: const Text('Message'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0288D1),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                          if (context.watch<MessagesProvider>().nonLusPour(
-                                MessagerieScreen.conversationIdPour(
-                                  patientNumero:
-                                      patient['numero'] as String? ?? '',
-                                  soignantMatricule: _matricule.isNotEmpty
-                                      ? _matricule
-                                      : DatabaseService.soignantDemoMatricule,
-                                ),
-                              ) >
-                              0)
-                            Positioned(
-                              right: -4,
-                              top: -6,
-                              child: BadgeNonLus(
-                                nombre: context
-                                    .watch<MessagesProvider>()
-                                    .nonLusPour(
-                                      MessagerieScreen.conversationIdPour(
-                                        patientNumero:
-                                            patient['numero'] as String? ?? '',
-                                        soignantMatricule: _matricule.isNotEmpty
-                                            ? _matricule
-                                            : DatabaseService
-                                                .soignantDemoMatricule,
-                                      ),
-                                    ),
-                              ),
-                            ),
-                        ],
-                      ),
+                // Actions — la messagerie est désormais dans l'en-tête (comme
+                // côté patient) ; restent ici la prescription et le rendez-vous.
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _ajouterProtocole,
+                    icon: const Icon(Icons.add_outlined, size: 18),
+                    label: const Text('Protocole'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0288D1),
+                      side: const BorderSide(
+                          color: Color(0xFF0288D1), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _ajouterProtocole,
-                        icon: const Icon(Icons.add_outlined, size: 18),
-                        label: const Text('Protocole'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF0288D1),
-                          side: const BorderSide(
-                              color: Color(0xFF0288D1), width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
 
                 const SizedBox(height: 12),
