@@ -13,6 +13,7 @@ import '../../core/widgets/badge_non_lus.dart';
 import '../messagerie/messagerie_screen.dart';
 import 'ajouter_patient_screen.dart';
 import 'gerer_medecins_screen.dart';
+import '../language/language_screen.dart';
 
 class DashboardSoignantScreen extends StatefulWidget {
   const DashboardSoignantScreen({super.key});
@@ -170,17 +171,22 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
         nomSoignant: _nomSoignant,
         patients: _patients,
         isLoading: _isLoading,
-        estAdmin: _estAdmin,
         onRefresh: _chargerDonnees,
-        onGererMedecins: _ouvrirGestionMedecins,
         onDeconnecter: _deconnecter,
-        onExporter: _exporterRapport,
       )
-          : _PagePatients(
-        patients: _patients,
-        isLoading: _isLoading,
-        onRefresh: _chargerDonnees,
-      ),
+          : _pageActive == 1
+              ? _PagePatients(
+                  patients: _patients,
+                  isLoading: _isLoading,
+                  onRefresh: _chargerDonnees,
+                )
+              : _PageParametres(
+                  nomSoignant: _nomSoignant,
+                  estAdmin: _estAdmin,
+                  onGererMedecins: _ouvrirGestionMedecins,
+                  onExporter: _exporterRapport,
+                  onDeconnecter: _deconnecter,
+                ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -220,6 +226,11 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
               activeIcon: Icon(Icons.people),
               label: 'Mes patients',
             ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined),
+              activeIcon: Icon(Icons.settings),
+              label: 'Paramètres',
+            ),
           ],
         ),
       ),
@@ -234,21 +245,15 @@ class _PageAccueil extends StatelessWidget {
   final String nomSoignant;
   final List<Map<String, dynamic>> patients;
   final bool isLoading;
-  final bool estAdmin;
   final VoidCallback onRefresh;
-  final VoidCallback onGererMedecins;
   final VoidCallback onDeconnecter;
-  final VoidCallback onExporter;
 
   const _PageAccueil({
     required this.nomSoignant,
     required this.patients,
     required this.isLoading,
-    required this.estAdmin,
     required this.onRefresh,
-    required this.onGererMedecins,
     required this.onDeconnecter,
-    required this.onExporter,
   });
 
   static String _salutation() {
@@ -486,58 +491,6 @@ class _PageAccueil extends StatelessWidget {
                     ),
                   ),
 
-                  // Bouton admin : gérer les médecins
-                  if (estAdmin) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton.icon(
-                        onPressed: onGererMedecins,
-                        icon: const Icon(Icons.manage_accounts_outlined,
-                            size: 20),
-                        label: const Text(
-                          'Gérer les médecins',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF0288D1),
-                          side: const BorderSide(
-                              color: Color(0xFF0288D1), width: 1.5),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  // Bouton export Excel
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: onExporter,
-                      icon: const Icon(Icons.file_download_outlined, size: 20),
-                      label: const Text(
-                        'Exporter le rapport (Excel)',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.success,
-                        side: BorderSide(
-                            color: AppColors.success.withValues(alpha: 0.6),
-                            width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ),
-
                   const SizedBox(height: 20),
 
                   // Tous les patients
@@ -599,6 +552,167 @@ class _PageAccueil extends StatelessWidget {
           ),
 
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PAGE PARAMÈTRES / GESTION
+// ─────────────────────────────────────────────────────────────────────────────
+class _PageParametres extends StatelessWidget {
+  final String nomSoignant;
+  final bool estAdmin;
+  final VoidCallback onGererMedecins;
+  final VoidCallback onExporter;
+  final VoidCallback onDeconnecter;
+  const _PageParametres({
+    required this.nomSoignant,
+    required this.estAdmin,
+    required this.onGererMedecins,
+    required this.onExporter,
+    required this.onDeconnecter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: Color(0xFF0288D1),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(28),
+              bottomRight: Radius.circular(28),
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child:
+                        const Icon(Icons.person, color: Colors.white, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(nomSoignant,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700)),
+                        Text(estAdmin ? 'Administrateur' : 'Soignant',
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              if (estAdmin)
+                _TuileParam(
+                  icone: Icons.manage_accounts_outlined,
+                  titre: 'Gérer les médecins',
+                  sousTitre: 'Créer et consulter les comptes médecins',
+                  onTap: onGererMedecins,
+                ),
+              _TuileParam(
+                icone: Icons.file_download_outlined,
+                titre: 'Exporter le rapport',
+                sousTitre: 'Générer le rapport d\'observance (Excel)',
+                couleur: AppColors.success,
+                onTap: onExporter,
+              ),
+              _TuileParam(
+                icone: Icons.language_outlined,
+                titre: 'Langue',
+                sousTitre: 'Changer la langue de l\'application',
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const LanguageScreen())),
+              ),
+              const SizedBox(height: 8),
+              _TuileParam(
+                icone: Icons.logout,
+                titre: 'Se déconnecter',
+                sousTitre: 'Quitter la session',
+                couleur: AppColors.danger,
+                onTap: onDeconnecter,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TuileParam extends StatelessWidget {
+  final IconData icone;
+  final String titre;
+  final String sousTitre;
+  final Color? couleur;
+  final VoidCallback onTap;
+  const _TuileParam({
+    required this.icone,
+    required this.titre,
+    required this.sousTitre,
+    required this.onTap,
+    this.couleur,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = couleur ?? const Color(0xFF0288D1);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE0E7EF)),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: c.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icone, color: c, size: 20),
+        ),
+        title: Text(titre,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
+        subtitle: Text(sousTitre,
+            style: const TextStyle(
+                fontSize: 12, color: AppColors.textSecondary)),
+        trailing:
+            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
       ),
     );
   }
