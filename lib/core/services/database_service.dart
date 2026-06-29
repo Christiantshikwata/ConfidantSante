@@ -732,6 +732,17 @@ class DatabaseService {
     return await db.query('patients', orderBy: 'nom ASC');
   }
 
+  /// Supprime un patient et toutes ses données liées (traitements, rappels,
+  /// prises, rendez-vous) de la base locale.
+  Future<void> supprimerPatient(int patientId) async {
+    final db = await database;
+    await db.delete('prises',      where: 'patient_id = ?', whereArgs: [patientId]);
+    await db.delete('rappels',     where: 'patient_id = ?', whereArgs: [patientId]);
+    await db.delete('traitements', where: 'patient_id = ?', whereArgs: [patientId]);
+    await db.delete('rendez_vous', where: 'patient_id = ?', whereArgs: [patientId]);
+    await db.delete('patients',    where: 'id = ?',         whereArgs: [patientId]);
+  }
+
   /// Crée un patient depuis le dashboard soignant (mot de passe haché),
   /// rattaché au médecin référent (matricule).
   Future<int> creerPatientParSoignant({

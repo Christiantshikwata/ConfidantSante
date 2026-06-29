@@ -530,7 +530,8 @@ class _PageAccueil extends StatelessWidget {
                       ),
                     )
                   else
-                    ...patients.map((p) => _LignePatient(patient: p)),
+                    ...patients.map((p) =>
+                        _LignePatient(patient: p, onRefresh: onRefresh)),
 
                 ],
 
@@ -1008,8 +1009,10 @@ class _PagePatientsState extends State<_PagePatients> {
             padding:
             const EdgeInsets.fromLTRB(20, 12, 20, 100),
             itemCount: _filtres.length,
-            itemBuilder: (_, i) =>
-                _CartePatientDetail(patient: _filtres[i]),
+            itemBuilder: (_, i) => _CartePatientDetail(
+              patient: _filtres[i],
+              onRefresh: widget.onRefresh,
+            ),
           ),
         ),
 
@@ -1071,7 +1074,8 @@ class _StatSoignant extends StatelessWidget {
 
 class _LignePatient extends StatelessWidget {
   final Map<String, dynamic> patient;
-  const _LignePatient({required this.patient});
+  final VoidCallback? onRefresh;
+  const _LignePatient({required this.patient, this.onRefresh});
 
   Color get _couleur {
     final obs = patient['observance'] as double? ?? 0;
@@ -1091,13 +1095,14 @@ class _LignePatient extends StatelessWidget {
         .toUpperCase();
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        final res = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder: (_) => DossierPatientScreen(patient: patient),
           ),
         );
+        if (res == true) onRefresh?.call();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -1195,7 +1200,8 @@ class _LignePatient extends StatelessWidget {
 
 class _CartePatientDetail extends StatelessWidget {
   final Map<String, dynamic> patient;
-  const _CartePatientDetail({required this.patient});
+  final VoidCallback? onRefresh;
+  const _CartePatientDetail({required this.patient, this.onRefresh});
 
   Color get _couleur {
     final obs = patient['observance'] as double? ?? 0;
@@ -1222,13 +1228,14 @@ class _CartePatientDetail extends StatelessWidget {
         .toUpperCase();
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        final res = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder: (_) => DossierPatientScreen(patient: patient),
           ),
         );
+        if (res == true) onRefresh?.call();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
@@ -1400,6 +1407,53 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
       _historique = hist;
       _traitements = trait;
     });
+  }
+
+  /// Supprime définitivement le patient (local + Firestore) après confirmation.
+  Future<void> _confirmerSuppression() async {
+    final nom = widget.patient['nom'] as String? ?? 'ce patient';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: const Text('Supprimer ce patient ?'),
+        content: Text(
+          'Toutes les données de $nom (traitements, historique des prises et '
+          'rendez-vous) seront définitivement effacées. Cette action est '
+          'irréversible.',
+          style: const TextStyle(
+              fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final id = widget.patient['id'] as int;
+    final numero = widget.patient['numero'] as String? ?? '';
+    await DatabaseService().supprimerPatient(id);
+    if (numero.isNotEmpty) {
+      await SyncService().supprimerComptePatient(numero);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$nom a été supprimé.')),
+    );
+    Navigator.pop(context, true);
   }
 
   // Médecin : attribue un protocole (médicament + dosage + durée) au patient.
@@ -1860,17 +1914,34 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          width: 38, height: 38,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 38, height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.arrow_back_ios_new,
+                                  color: Colors.white, size: 16),
+                            ),
                           ),
-                          child: const Icon(Icons.arrow_back_ios_new,
-                              color: Colors.white, size: 16),
-                        ),
+                          GestureDetector(
+                            onTap: _confirmerSuppression,
+                            child: Container(
+                              width: 38, height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.delete_outline,
+                                  color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 20),
                       Row(

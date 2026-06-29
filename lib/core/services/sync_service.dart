@@ -341,6 +341,25 @@ class SyncService {
     }
   }
 
+  /// Médecin : supprime le compte patient de Firestore — le profil et ses
+  /// sous-collections (traitements, prises, rendez_vous). Le compte Firebase
+  /// Auth n'est pas supprimé ici (cela exigerait des privilèges administrateur).
+  Future<void> supprimerComptePatient(String numero) async {
+    if (!firebaseDisponible) return;
+    try {
+      final ref = _firestore.collection('patients').doc(numero);
+      for (final sousCollection in ['traitements', 'prises', 'rendez_vous']) {
+        final snap = await ref.collection(sousCollection).get();
+        for (final doc in snap.docs) {
+          await doc.reference.delete();
+        }
+      }
+      await ref.delete();
+    } catch (e) {
+      debugPrint('[SyncService] Erreur supprimerComptePatient : $e');
+    }
+  }
+
   /// Met à jour le médecin référent d'un patient dans Firestore (migration).
   Future<void> mettreAJourSoignantPatient({
     required String numero,

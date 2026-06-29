@@ -16,6 +16,12 @@ class ReportService {
     return 'En retard';
   }
 
+  // Affiche un tiret pour les champs vides ou nuls.
+  String _ou(dynamic valeur) {
+    final s = valeur?.toString().trim() ?? '';
+    return s.isEmpty ? '—' : s;
+  }
+
   /// Construit le classeur Excel (récap de tous les patients + détail des
   /// prises par patient sur 30 jours) et retourne le chemin du fichier.
   Future<String> genererRapportExcel(
@@ -27,6 +33,13 @@ class ReportService {
     recap.appendRow([
       TextCellValue('Nom'),
       TextCellValue('Numero'),
+      TextCellValue('Genre'),
+      TextCellValue('Adresse'),
+      TextCellValue('Taux serologique'),
+      TextCellValue('Contact urgence'),
+      TextCellValue('Tel. urgence'),
+      TextCellValue('Hopital'),
+      TextCellValue('Medecin referent'),
       TextCellValue('Protocole'),
       TextCellValue('Observance (%)'),
       TextCellValue('Statut'),
@@ -42,6 +55,13 @@ class ReportService {
       recap.appendRow([
         TextCellValue(p['nom'] as String? ?? ''),
         TextCellValue('+243 ${p['numero'] ?? ''}'),
+        TextCellValue(_ou(p['genre'])),
+        TextCellValue(_ou(p['adresse'])),
+        TextCellValue(_ou(p['taux_serologique'])),
+        TextCellValue(_ou(p['contact_urgence_nom'])),
+        TextCellValue(_ou(p['contact_urgence_tel'])),
+        TextCellValue(_ou(p['hopital'])),
+        TextCellValue(_ou(p['soignant'])),
         TextCellValue(protocole.isEmpty ? '—' : protocole),
         IntCellValue(obs.round()),
         TextCellValue(_statut(obs)),
