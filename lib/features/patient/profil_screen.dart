@@ -10,6 +10,7 @@ import '../../core/providers/patient_provider.dart';
 import '../../core/providers/messages_provider.dart';
 import '../../core/services/session_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/database_service.dart';
 import 'profile/parametres_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
@@ -93,6 +94,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
     // Construit l'historique depuis les prises SQLite
     final historiqueMap = patient.historique;
+    // Agrège par jour (une seule case par date, même avec plusieurs protocoles).
+    final joursHisto = DatabaseService.grouperParJour(historiqueMap);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
@@ -264,7 +267,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     ),
                     const SizedBox(width: 12),
                     _CarteStatProfil(
-                      valeur: '$totalPrises',
+                      valeur: '${joursHisto.length}',
                       label: t('jours_total'),
                       icone: Icons.calendar_month_outlined,
                       couleur: AppColors.primary,
@@ -403,32 +406,32 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           crossAxisSpacing: 4,
                           mainAxisSpacing: 4,
                         ),
-                        itemCount:
-                        historiqueMap.length.clamp(0, 30),
+                        itemCount: joursHisto.length,
                         itemBuilder: (context, i) {
-                          final prise = historiqueMap[i];
-                          final estPris = prise['statut'] == 'pris';
-                          final date = DateTime.tryParse(
-                              prise['date_heure'] as String? ?? '');
-                          final jour = date?.day ?? (i + 1);
-
+                          final j = joursHisto[i];
+                          final date = j['date'] as DateTime;
+                          final taux = j['taux'] as double;
+                          // Couleur graduée : vert (tout pris), ambre (partiel),
+                          // rouge (rien).
+                          final couleur = taux >= 1.0
+                              ? AppColors.success
+                              : (taux <= 0.0
+                                  ? AppColors.danger
+                                  : AppColors.warning);
                           return Tooltip(
-                            message: estPris ? 'Pris' : 'Manqué',
+                            message:
+                                '${date.day}/${date.month} — ${(taux * 100).round()}% (${j['pris']}/${j['total']})',
                             child: Container(
                               decoration: BoxDecoration(
-                                color: estPris
-                                    ? AppColors.primary
-                                    : const Color(0xFFFFCDD2),
+                                color: couleur,
                                 borderRadius: BorderRadius.circular(5),
                               ),
                               child: Center(
                                 child: Text(
-                                  '$jour',
-                                  style: TextStyle(
+                                  '${date.day}',
+                                  style: const TextStyle(
                                     fontSize: 9,
-                                    color: estPris
-                                        ? Colors.white
-                                        : AppColors.danger,
+                                    color: Colors.white,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -442,13 +445,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _LegendeCal(AppColors.primary, 'Pris'),
-                          const SizedBox(width: 20),
-                          _LegendeCal(
-                            const Color(0xFFFFCDD2),
-                            'Manqué',
-                            textColor: AppColors.danger,
-                          ),
+                          _LegendeCal(AppColors.success, 'Pris'),
+                          const SizedBox(width: 16),
+                          _LegendeCal(AppColors.warning, 'Partiel'),
+                          const SizedBox(width: 16),
+                          _LegendeCal(AppColors.danger, 'Manqué'),
                         ],
                       ),
                     ],

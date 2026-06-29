@@ -445,20 +445,6 @@ class _PageAccueil extends StatelessWidget {
                     const SizedBox(height: 20),
                   ],
 
-                  // Alertes
-                  if (_alertes.isNotEmpty) ...[
-                    const Text(
-                      'Alertes actives',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.danger,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ..._alertes.map((p) => _CarteAlerte(patient: p)),
-                    const SizedBox(height: 20),
-                  ],
 
                   // Bouton ajouter patient
                   SizedBox(
@@ -1078,102 +1064,6 @@ class _StatSoignant extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _CarteAlerte extends StatelessWidget {
-  final Map<String, dynamic> patient;
-  const _CarteAlerte({required this.patient});
-
-  @override
-  Widget build(BuildContext context) {
-    final obs = (patient['observance'] as double? ?? 0);
-    final initiales = (patient['nom'] as String? ?? 'P')
-        .split(' ')
-        .map((e) => e.isNotEmpty ? e[0] : '')
-        .take(2)
-        .join()
-        .toUpperCase();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border(
-          left: BorderSide(color: AppColors.danger, width: 3),
-          top: BorderSide(color: const Color(0xFFE0E7EF)),
-          right: BorderSide(color: const Color(0xFFE0E7EF)),
-          bottom: BorderSide(color: const Color(0xFFE0E7EF)),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.danger,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                initiales,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  patient['nom'] as String? ?? '',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  'Observance : ${obs.toInt()}% — Intervention requise',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.danger),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.danger.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Urgent',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.danger,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _LignePatient extends StatelessWidget {
