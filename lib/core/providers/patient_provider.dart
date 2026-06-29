@@ -94,8 +94,19 @@ class PatientProvider extends ChangeNotifier {
 
     if (_patientId == null) return;
 
+    // Récupère d'abord depuis Firestore les protocoles (avec l'heure déjà
+    // choisie sur un autre appareil → recrée le rappel), l'historique des
+    // prises (observance) et les rendez-vous fixés par le médecin. C'est ce qui
+    // rétablit les données du patient sur un nouveau téléphone.
+    if (_numero.isNotEmpty) {
+      await SyncService().pullProtocoles(_numero, _patientId!);
+      await SyncService().pullPrises(_numero, _patientId!);
+      await SyncService().pullRendezVous(_numero, _patientId!);
+    }
+
     // Enregistre les doses manquées des jours écoulés (réconciliation) —
-    // avant de désactiver les rappels expirés, pour couvrir toute la durée.
+    // après la récupération distante (les rappels existent alors) et avant de
+    // désactiver les rappels expirés, pour couvrir toute la durée.
     await DatabaseService().reconcilierPrisesManquees(_patientId!);
 
     // Désactive et annule les rappels dont le protocole est terminé
@@ -107,15 +118,13 @@ class PatientProvider extends ChangeNotifier {
     // Charge les rappels
     _rappels = await DatabaseService().getRappels(_patientId!);
 
+    // (Re)programme les notifications de tous les rappels actifs. Indispensable
+    // sur un nouvel appareil, après réinstallation ou redémarrage : sans cela
+    // aucune notification n'était planifiée.
+    await _reprogrammerNotifications();
+
     // Charge les traitements
     _traitements = await DatabaseService().getTraitements(_patientId!);
-
-    // Récupère les protocoles et les rendez-vous fixés par le médecin
-    // (Firestore → local).
-    if (_numero.isNotEmpty) {
-      await SyncService().pullProtocoles(_numero, _patientId!);
-      await SyncService().pullRendezVous(_numero, _patientId!);
-    }
 
     // Protocoles attribués par le médecin, en attente d'une heure
     _protocoles = await DatabaseService().getProtocolesAConfigurer(_patientId!);
@@ -136,6 +145,21 @@ class PatientProvider extends ChangeNotifier {
         .length;
 
     notifyListeners();
+  }
+
+  /// (Re)planifie une notification quotidienne pour chaque rappel actif.
+  /// Idempotent : reprogrammer un même id remplace simplement la planification.
+  Future<void> _reprogrammerNotifications() async {
+    for (final r in _rappels) {
+      final heure = r['heure'] as String? ?? '';
+      if (heure.isEmpty) continue;
+      await NotificationService().programmerDepuisTexte(
+        id:            r['id'] as int,
+        nomMedicament: r['nom_medicament'] as String? ?? '',
+        dosage:        r['dosage'] as String? ?? '',
+        heureTexte:    heure,
+      );
+    }
   }
 
   // Ajoute un rappel et recharge
@@ -195,6 +219,17 @@ class PatientProvider extends ChangeNotifier {
       dosage:        dosage,
       heureTexte:    heure,
     );
+
+    // Mémorise l'heure côté Firestore : elle sera rétablie automatiquement sur
+    // les autres appareils du patient (rappel + notification recréés au pull).
+    final remoteId = protocole['remote_id'] as String?;
+    if (_numero.isNotEmpty && remoteId != null && remoteId.isNotEmpty) {
+      await SyncService().pousserHeureProtocole(
+        numero:   _numero,
+        remoteId: remoteId,
+        heure:    heure,
+      );
+    }
 
     await chargerDonnees();
   }

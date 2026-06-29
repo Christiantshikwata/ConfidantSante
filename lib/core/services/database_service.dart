@@ -27,7 +27,7 @@ class DatabaseService {
     return await openDatabase(
       cheminComplet,
       onCreate: _creerTables,
-      version: 10,
+      version: 11,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _creerTableRendezVous(db);
@@ -96,6 +96,14 @@ class DatabaseService {
           await _ajouterColonneSiAbsente(
               db, 'patients', 'contact_urgence_tel', 'TEXT');
         }
+        if (oldVersion < 11) {
+          // Identité stable inter-appareils : un rappel mémorise le remote_id
+          // du protocole dont il découle, et chaque prise porte un identifiant
+          // déterministe (protocole + jour) pour la synchronisation et la
+          // déduplication lors d'une connexion sur un nouvel appareil.
+          await _ajouterColonneSiAbsente(db, 'rappels', 'remote_id', 'TEXT');
+          await _ajouterColonneSiAbsente(db, 'prises', 'remote_id', 'TEXT');
+        }
       },
     );
   }
@@ -160,6 +168,7 @@ class DatabaseService {
         date_heure TEXT NOT NULL,
         statut TEXT DEFAULT 'pris',
         synchronise INTEGER DEFAULT 0,
+        remote_id TEXT,
         FOREIGN KEY (traitement_id) REFERENCES traitements(id)
       )
     ''');
@@ -176,6 +185,7 @@ class DatabaseService {
         date_creation TEXT,
         date_fin TEXT,
         traitement_id INTEGER,
+        remote_id TEXT,
         FOREIGN KEY (patient_id) REFERENCES patients(id)
       )
     ''');
@@ -376,13 +386,46 @@ class DatabaseService {
       return 0;
     }
 
+    final maintenant = DateTime.now();
+    final remoteId = await _clePriseDepuisRappel(traitementId, maintenant);
+
     return await db.insert('prises', {
       'traitement_id': traitementId,
       'patient_id': patientId,
-      'date_heure': DateTime.now().toIso8601String(),
+      'date_heure': maintenant.toIso8601String(),
       'statut': statut,
       'synchronise': 0,
+      'remote_id': remoteId,
     });
+  }
+
+  /// Identifiant déterministe d'une prise : il dépend du protocole (remote_id
+  /// du rappel, stable d'un appareil à l'autre) et du jour calendaire. Deux
+  /// appareils calculent ainsi la même clé pour la même prise, ce qui permet de
+  /// dédupliquer l'historique lors d'une connexion sur un nouveau téléphone.
+  String _clePriseStable(String? rappelRemoteId, int rappelId, DateTime jour) {
+    final j = DateTime(jour.year, jour.month, jour.day);
+    final cleJour = '${j.year.toString().padLeft(4, '0')}'
+        '${j.month.toString().padLeft(2, '0')}'
+        '${j.day.toString().padLeft(2, '0')}';
+    final base = (rappelRemoteId != null && rappelRemoteId.isNotEmpty)
+        ? rappelRemoteId
+        : 'loc_$rappelId';
+    return '${base}__$cleJour';
+  }
+
+  /// Calcule la clé stable d'une prise à partir de l'id du rappel concerné.
+  Future<String> _clePriseDepuisRappel(int rappelId, DateTime jour) async {
+    final db = await database;
+    final r = await db.query(
+      'rappels',
+      columns: ['remote_id'],
+      where: 'id = ?',
+      whereArgs: [rappelId],
+      limit: 1,
+    );
+    final remote = r.isNotEmpty ? r.first['remote_id'] as String? : null;
+    return _clePriseStable(remote, rappelId, jour);
   }
 
   /// Indique si une prise « pris » a déjà été enregistrée aujourd'hui pour ce rappel.
@@ -511,6 +554,8 @@ class DatabaseService {
                     .toIso8601String(),
             'statut': 'manque',
             'synchronise': 0,
+            'remote_id':
+                _clePriseStable(r['remote_id'] as String?, id, jour),
           });
         }
         jour = jour.add(const Duration(days: 1));
@@ -1000,26 +1045,58 @@ class DatabaseService {
     String? dateDebut,
     String? dateFin,
     int? dureeMois,
+    String? heure,
   }) async {
     final db = await database;
+    final heureEff = heure ?? '';
+
     final existant = await db.query(
       'traitements',
       where: 'patient_id = ? AND remote_id = ?',
       whereArgs: [patientId, remoteId],
       limit: 1,
     );
-    if (existant.isNotEmpty) return;
-    await db.insert('traitements', {
-      'patient_id':     patientId,
-      'nom_medicament': nomMedicament,
-      'dosage':         dosage,
-      'heure':          '',
-      'date_debut':     dateDebut,
-      'date_fin':       dateFin,
-      'duree_mois':     dureeMois,
-      'est_actif':      1,
-      'remote_id':      remoteId,
-    });
+
+    int traitementId;
+    if (existant.isNotEmpty) {
+      traitementId = existant.first['id'] as int;
+      // Met à jour l'heure si elle a été définie/changée (autre appareil).
+      if (heureEff.isNotEmpty && existant.first['heure'] != heureEff) {
+        await db.update(
+          'traitements',
+          {'heure': heureEff},
+          where: 'id = ?',
+          whereArgs: [traitementId],
+        );
+      }
+    } else {
+      traitementId = await db.insert('traitements', {
+        'patient_id':     patientId,
+        'nom_medicament': nomMedicament,
+        'dosage':         dosage,
+        'heure':          heureEff,
+        'date_debut':     dateDebut,
+        'date_fin':       dateFin,
+        'duree_mois':     dureeMois,
+        'est_actif':      1,
+        'remote_id':      remoteId,
+      });
+    }
+
+    // Si l'heure est déjà connue (protocole configuré sur un autre appareil),
+    // on rétablit le rappel quotidien correspondant.
+    if (heureEff.isNotEmpty) {
+      await assurerRappelDepuisProtocole(
+        patientId:          patientId,
+        traitementRemoteId: remoteId,
+        traitementId:       traitementId,
+        nomMedicament:      nomMedicament,
+        dosage:             dosage,
+        heure:              heureEff,
+        dateDebut:          dateDebut,
+        dateFin:            dateFin,
+      );
+    }
   }
 
   /// Patient : protocoles attribués dont l'heure n'est pas encore définie.
@@ -1051,6 +1128,17 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [traitementId],
     );
+
+    // remote_id du protocole (identité stable du rappel entre appareils).
+    final t = await db.query(
+      'traitements',
+      columns: ['remote_id'],
+      where: 'id = ?',
+      whereArgs: [traitementId],
+      limit: 1,
+    );
+    final remoteId = t.isNotEmpty ? t.first['remote_id'] as String? : null;
+
     return await db.insert('rappels', {
       'patient_id':     patientId,
       'nom_medicament': nomMedicament,
@@ -1060,6 +1148,100 @@ class DatabaseService {
       'date_creation':  DateTime.now().toIso8601String(),
       'date_fin':       dateFin,
       'traitement_id':  traitementId,
+      'remote_id':      remoteId,
+    });
+  }
+
+  /// Recrée si besoin le rappel quotidien d'un protocole déjà configuré (heure
+  /// définie sur un autre appareil). Idempotent : déduplication par remote_id du
+  /// protocole. Retourne l'id du rappel (existant ou créé), ou null si l'heure
+  /// est absente.
+  Future<int?> assurerRappelDepuisProtocole({
+    required int patientId,
+    required String traitementRemoteId,
+    required int traitementId,
+    required String nomMedicament,
+    required String dosage,
+    required String heure,
+    String? dateDebut,
+    String? dateFin,
+  }) async {
+    if (heure.isEmpty || traitementRemoteId.isEmpty) return null;
+    final db = await database;
+
+    final existant = await db.query(
+      'rappels',
+      where: 'patient_id = ? AND remote_id = ?',
+      whereArgs: [patientId, traitementRemoteId],
+      limit: 1,
+    );
+    if (existant.isNotEmpty) {
+      // Réactive et resynchronise l'heure si elle a changé côté médecin/patient.
+      await db.update(
+        'rappels',
+        {'heure': heure, 'est_actif': 1, 'date_fin': dateFin},
+        where: 'id = ?',
+        whereArgs: [existant.first['id']],
+      );
+      return existant.first['id'] as int;
+    }
+
+    return await db.insert('rappels', {
+      'patient_id':     patientId,
+      'nom_medicament': nomMedicament,
+      'dosage':         dosage,
+      'heure':          heure,
+      'est_actif':      1,
+      'date_creation':  dateDebut ?? DateTime.now().toIso8601String(),
+      'date_fin':       dateFin,
+      'traitement_id':  traitementId,
+      'remote_id':      traitementRemoteId,
+    });
+  }
+
+  /// Patient : insère une prise reçue de Firestore si elle n'existe pas déjà
+  /// localement (déduplication par remote_id). Le rappel local correspondant est
+  /// retrouvé via le remote_id du protocole, ce qui rétablit l'historique et
+  /// l'observance lors d'une connexion sur un nouvel appareil.
+  Future<void> upsertPriseDepuisFirestore({
+    required int patientId,
+    required String remoteId,
+    String? traitementRemoteId,
+    required String dateHeure,
+    required String statut,
+  }) async {
+    if (remoteId.isEmpty || dateHeure.isEmpty) return;
+    final db = await database;
+
+    final deja = await db.query(
+      'prises',
+      where: 'patient_id = ? AND remote_id = ?',
+      whereArgs: [patientId, remoteId],
+      limit: 1,
+    );
+    if (deja.isNotEmpty) return;
+
+    // Relie la prise au rappel local correspondant (même protocole) quand c'est
+    // possible ; sinon 0 (l'historique par jour reste correct).
+    int traitementId = 0;
+    if (traitementRemoteId != null && traitementRemoteId.isNotEmpty) {
+      final r = await db.query(
+        'rappels',
+        columns: ['id'],
+        where: 'patient_id = ? AND remote_id = ?',
+        whereArgs: [patientId, traitementRemoteId],
+        limit: 1,
+      );
+      if (r.isNotEmpty) traitementId = r.first['id'] as int;
+    }
+
+    await db.insert('prises', {
+      'traitement_id': traitementId,
+      'patient_id':    patientId,
+      'date_heure':    dateHeure,
+      'statut':        statut,
+      'synchronise':   1,
+      'remote_id':     remoteId,
     });
   }
 

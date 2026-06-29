@@ -69,6 +69,8 @@ class SyncService {
 
       await _syncProfil(patientId, numero);
       total += await _syncPrises(patientId, numero);
+      // Récupère l'historique distant (restauration sur un nouvel appareil).
+      total += await pullPrises(numero, patientId);
       total += await _syncRappels(patientId, numero);
       // Les rendez-vous sont désormais fixés par le médecin : le patient les
       // récupère (pull) au lieu de les pousser.
@@ -134,18 +136,42 @@ class SyncService {
       );
 
       for (final prise in prises) {
-        final priseId = prise['id'].toString();
+        final localId = prise['id'].toString();
+        // Identifiant stable (protocole + jour) : même prise = même document,
+        // d'un appareil à l'autre. À défaut (anciennes lignes), l'id local.
+        final remoteId = (prise['remote_id'] as String?)?.isNotEmpty == true
+            ? prise['remote_id'] as String
+            : localId;
+
+        // remote_id du protocole (via le rappel) pour relier la prise au bon
+        // rappel lors d'une restauration sur un nouvel appareil.
+        String? traitementRemoteId;
+        final rappelId = prise['traitement_id'];
+        if (rappelId != null) {
+          final r = await dbInstance.query(
+            'rappels',
+            columns: ['remote_id'],
+            where: 'id = ?',
+            whereArgs: [rappelId],
+            limit: 1,
+          );
+          if (r.isNotEmpty) {
+            traitementRemoteId = r.first['remote_id'] as String?;
+          }
+        }
 
         await _firestore
             .collection('patients')
             .doc(numero)
             .collection('prises')
-            .doc(priseId)
+            .doc(remoteId)
             .set({
-          'traitement_id': prise['traitement_id'],
-          'date_heure':    prise['date_heure'],
-          'statut':        prise['statut'],
-          'sync_at':       FieldValue.serverTimestamp(),
+          'traitement_id':        prise['traitement_id'],
+          'traitement_remote_id': traitementRemoteId,
+          'remote_id':            remoteId,
+          'date_heure':           prise['date_heure'],
+          'statut':               prise['statut'],
+          'sync_at':              FieldValue.serverTimestamp(),
         });
 
         await dbInstance.update(
@@ -466,11 +492,62 @@ class SyncService {
           dateDebut:     d['date_debut'] as String?,
           dateFin:       d['date_fin'] as String?,
           dureeMois:     d['duree_mois'] as int?,
+          heure:         d['heure'] as String?,
         );
       }
     } catch (e) {
       debugPrint('[SyncService] Erreur pullProtocoles : $e');
     }
+  }
+
+  /// Patient : enregistre dans Firestore l'heure de prise qu'il a choisie pour
+  /// un protocole. Elle est ainsi rétablie automatiquement sur ses autres
+  /// appareils (le rappel et la notification sont recréés au prochain chargement).
+  Future<void> pousserHeureProtocole({
+    required String numero,
+    required String remoteId,
+    required String heure,
+  }) async {
+    if (!firebaseDisponible) return;
+    try {
+      await _firestore
+          .collection('patients')
+          .doc(numero)
+          .collection('traitements')
+          .doc(remoteId)
+          .set({'heure': heure}, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pousserHeureProtocole : $e');
+    }
+  }
+
+  /// Patient : récupère l'historique des prises depuis Firestore et le restaure
+  /// localement (sans doublon). Indispensable sur un nouvel appareil pour
+  /// retrouver l'observance et l'historique. Retourne le nombre de prises lues.
+  Future<int> pullPrises(String numero, int patientId) async {
+    if (!firebaseDisponible) return 0;
+    int count = 0;
+    try {
+      final snap = await _firestore
+          .collection('patients')
+          .doc(numero)
+          .collection('prises')
+          .get();
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        await DatabaseService().upsertPriseDepuisFirestore(
+          patientId:          patientId,
+          remoteId:           (d['remote_id'] as String?) ?? doc.id,
+          traitementRemoteId: d['traitement_remote_id'] as String?,
+          dateHeure:          d['date_heure'] as String? ?? '',
+          statut:             d['statut'] as String? ?? 'pris',
+        );
+        count++;
+      }
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pullPrises : $e');
+    }
+    return count;
   }
 
   // ── Observance depuis Firestore (pour le soignant), par numéro patient ─────
