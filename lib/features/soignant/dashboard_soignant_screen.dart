@@ -44,9 +44,12 @@ class _DashboardSoignantScreenState extends State<DashboardSoignantScreen> {
       final matricule = await SessionService().getSoignantMatricule() ?? '';
       final admin = DatabaseService().estAdmin(matricule);
 
-      // Médecin (non-admin) : récupère d'abord ses patients depuis Firestore
-      // (création ou migration sur un autre appareil), puis lit en local.
-      if (!admin && matricule.isNotEmpty) {
+      // Récupère d'abord les patients depuis Firestore (réinstallation ou
+      // nouvel appareil), puis lit en local. L'admin rapatrie TOUS les patients ;
+      // un médecin ne rapatrie que les siens.
+      if (admin) {
+        await SyncService().pullTousPatients();
+      } else if (matricule.isNotEmpty) {
         await SyncService().pullPatientsDuSoignant(matricule);
       }
 
@@ -1380,6 +1383,15 @@ class _DossierPatientScreenState extends State<DossierPatientScreen> {
   Future<void> _charger() async {
     final id = widget.patient['id'] as int;
     final mat = await SessionService().getSoignantMatricule();
+
+    // Rapatrie depuis Firestore les protocoles et l'historique des prises du
+    // patient (réinstallation / nouvel appareil du soignant), puis lit en local.
+    final numero = widget.patient['numero'] as String? ?? '';
+    if (numero.isNotEmpty) {
+      await SyncService().pullProtocoles(numero, id);
+      await SyncService().pullPrises(numero, id);
+    }
+
     final hist = await DatabaseService().getHistorique30j(id);
     final trait = await DatabaseService().getTraitements(id);
     if (!mounted) return;

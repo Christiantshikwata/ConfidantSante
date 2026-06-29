@@ -424,6 +424,36 @@ class SyncService {
     }
   }
 
+  /// Admin : récupère TOUS les patients depuis Firestore et les enregistre
+  /// localement. Indispensable après une réinstallation ou sur un nouvel
+  /// appareil : l'administrateur (médecin de démonstration) lit la liste
+  /// complète, qui n'existe plus en local tant qu'elle n'a pas été rapatriée.
+  Future<void> pullTousPatients() async {
+    if (!firebaseDisponible) return;
+    try {
+      final snap = await _firestore.collection('patients').get();
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        // Ignore d'éventuels documents qui ne sont pas des patients.
+        if (d['role'] != null && d['role'] != 'patient') continue;
+        await DatabaseService().upsertPatientDepuisFirestore(
+          numero:            d['numero'] as String? ?? doc.id,
+          nom:               d['nom'] as String? ?? '',
+          soignant:          d['soignant'] as String?,
+          soignantMatricule: d['soignant_matricule'] as String?,
+          hopital:           d['hopital'] as String?,
+          adresse:           d['adresse'] as String?,
+          genre:             d['genre'] as String?,
+          tauxSerologique:   d['taux_serologique'] as String?,
+          contactUrgenceNom: d['contact_urgence_nom'] as String?,
+          contactUrgenceTel: d['contact_urgence_tel'] as String?,
+        );
+      }
+    } catch (e) {
+      debugPrint('[SyncService] Erreur pullTousPatients : $e');
+    }
+  }
+
   /// Patient : récupère le compte (profil + hash) depuis Firestore, s'il existe.
   Future<Map<String, dynamic>?> recupererComptePatient(String numero) async {
     if (!firebaseDisponible) return null;
